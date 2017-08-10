@@ -3,7 +3,7 @@ from pyvmomi_tools import cli
 import time
 import logging
 
-import exceptions
+import vmpie_exceptions
 import folder
 import vcenter
 import consts
@@ -12,7 +12,7 @@ import consts
 def get_vcenter():
     if isinstance(__import__("vmpie").vcenter, vcenter.VCenter):
         return __import__("vmpie").vcenter
-    raise exceptions.NotConnectedException
+    raise vmpie_exceptions.NotConnectedException
 
 
 def update_stub(object):
@@ -45,7 +45,7 @@ def get_obj_by_name(name=None, vimtypes=[], folder=None):
             break
 
     if obj is None:
-        raise exceptions.ObjectNotFoundException
+        raise vmpie_exceptions.ObjectNotFoundException
 
     return obj
 
@@ -73,7 +73,7 @@ def get_obj(vimtypes=[], name=None):
         return obj
 
     except AttributeError:
-        raise exceptions.NotConnectedException
+        raise vmpie_exceptions.NotConnectedException
 
 
 def get_objects(vimtypes=[]):
@@ -88,15 +88,13 @@ def get_objects(vimtypes=[]):
         return container.view
 
     except AttributeError:
-        raise exceptions.NotConnectedException
+        raise vmpie_exceptions.NotConnectedException
 
 
 def is_vmware_tools_running(vm):
     tools_status = vm._pyVmomiVM.guest.toolsStatus
-    if (tools_status == 'toolsNotInstalled' or
-            tools_status == 'toolsNotRunning'):
-        logging.warning(
-            "VmWare tools are either not running or not installed.")
+    if tools_status == 'toolsNotInstalled' or tools_status == 'toolsNotRunning':
+        logging.warning("VmWare tools are either not running or not installed.")
         return False
 
     return True
@@ -117,9 +115,9 @@ def run_command_in_vm(vm, command, arguments, credentials):
             return res
 
         except AttributeError:
-            raise exceptions.NotConnectedException
+            raise vmpie_exceptions.NotConnectedException
     else:
-        raise exceptions.VmwareToolsException
+        raise vmpie_exceptions.VmwareToolsException
 
 
 def _create_folder_tree(root_folder=None):
@@ -128,7 +126,9 @@ def _create_folder_tree(root_folder=None):
 
     if root_folder is None:
         # What if multiple datacenters are available? childEntity[0]...
-        root_folder = folder.Folder('vm', _pyVmomiFolder=vcenter._connection.content.rootFolder.childEntity[0].vmFolder)
+        root_folder = folder.Folder('vm',
+                                    _pyVmomiFolder=vcenter._connection.content.rootFolder.childEntity[0].vmFolder)
+
     elif isinstance(root_folder, vim.Folder):
         root_folder = folder.Folder(root_folder.name, _pyVmomiFolder=root_folder)
     elif isinstance(root_folder, str):

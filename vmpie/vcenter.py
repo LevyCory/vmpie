@@ -1,20 +1,31 @@
-import logging
-import atexit
 import time
+import base64
+import atexit
+import logging
+from threading import Thread
+
 from pyVmomi import vim
 from pyVim.connect import SmartConnect, Disconnect
-from threading import Thread
-import base64
 
 import vmpie
 import consts
 import utils
 from folder import Folder
 from virtual_machine import VirtualMachine
+from vmpie_exceptions import NotConnectedException
 
+def connected(f):
+    def wrapper(*args, **kwargs):
+        vcenter = utils.get_vcenter()
+        if vcenter.is_connected():
+            return f(*args, **kwargs)
+        raise NotConnectedException
+    return wrapper
 
 class VCenter(object):
+    """
 
+    """
     def __init__(self):
 
         self._connection = None

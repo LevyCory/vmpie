@@ -33,7 +33,7 @@ class Task(object):
     def is_success(self):
         return self.state == consts.SUCCESS_STATE
 
-    def wait(self):
+    def wait(self, spinner=False):
         self._pyVmomiTask.wait()
 
     def wait_with_spinner(self, condition, argument, msg):

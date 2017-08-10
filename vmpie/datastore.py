@@ -4,7 +4,7 @@ from pyVmomi import vmodl
 
 import utils
 import virtual_machine
-import exceptions
+import vmpie_exceptions
 
 
 class Datastore(object):
@@ -79,7 +79,7 @@ class Datastore(object):
         try:
             self._pyVmomiDatastore.DatastoreEnterMaintenanceMode()
         except vim.fault.InvalidState:
-            raise exceptions.InvalidStateException(
+            raise vmpie_exceptions.InvalidStateException(
                 "Datastore {datastore_name} is already in maintenance mode.".format(
                     datastore_name=self.name
                 )
@@ -90,7 +90,7 @@ class Datastore(object):
         try:
             task = self._pyVmomiDatastore.DatastoreExitMaintenanceMode_Task()
         except vim.fault.InvalidState:
-            raise exceptions.InvalidStateException(
+            raise vmpie_exceptions.InvalidStateException(
                 "Datastore {datastore_name} is not in maintenance mode.".format(
                     datastore_name=self.name
                 )
