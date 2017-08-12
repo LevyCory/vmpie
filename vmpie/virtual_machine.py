@@ -62,7 +62,7 @@ class VirtualMachine(object):
         # Hardware must be a part of the object
         self.hardware = HardwarePlugin(self)
 
-        # Load collected plugins
+        # Load collected plugins if they're compatible with the guest OS
         for plugin in _plugins:
             if self._is_plugin_compatible(plugin):
                 self.load_plugin(plugin)
@@ -72,17 +72,21 @@ class VirtualMachine(object):
 
     def _is_plugin_compatible(self, plugin):
         """
-
-        @param plugin:
-        @return:
+        Check if a plugin is compatible with the guest OS.
+        @param plugin: The plugin to validate
+        @type plugin: I{vmpie.plugin.Plugin}
+        @return: Whether the plugin is compatible with the guest OS or not.
+        @rtype: I{boolean}
         """
         return self.hardware.get_os_name() in plugin._os
 
     def load_plugin(self, plugin):
         """
-        @summary: Load a plugin
+        Load a plugin to the VM object.
+        @param plugin: The plugin to load.
+        @type plugin: I{vmpie.plugin.Plugin}
         """
-        setattr(self, plugin._name, plugin)
+        setattr(self, plugin._name, plugin(self))
 
     @property
     @connected

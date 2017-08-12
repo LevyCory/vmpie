@@ -9,12 +9,17 @@ setup(
         'vmpie.subsystems':
             [
                 'VCenter = vmpie.vcenter:VCenter'
+            ],
+        'console_scripts':
+            [
+                'vmplugin = vmpie.vmplugin:main'
             ]
     },
     install_requires=[
         'pyVmomi',
         'requests',
         'six>=1.7.3',
-        'pyvmomi-tools'
+        'pyvmomi-tools',
+        'urllib3'
     ]
 )
