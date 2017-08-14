@@ -6,7 +6,7 @@ from plugin import Plugin
 from vcenter import connected
 
 
-#TODO: Document all plugin methods
+# TODO: Document all plugin methods
 class HardwarePlugin(Plugin):
     """
     Provide basic hardware functionality. This is the most basic wrapper of pyVmomi objects.

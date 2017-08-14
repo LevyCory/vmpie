@@ -104,3 +104,12 @@ class NTFilesystemPlugin(Plugin):
 
     def download_file(self):
         pass
+
+
+# TODO: Implement the unix filesystem plugin
+class UnixFilesystem(Plugin):
+    """
+
+    """
+    _name = "filesystem"
+    _os = ["unix"]

@@ -8,8 +8,6 @@
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
-import os
-import shutil
 import argparse
 
 import vmpie
@@ -26,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser("The VM-Plugin manager")
     parser.add_argument("list", action="store_true", type=bool, help="List all installed VM-Plugins")
     parser.add_argument("install", action="store", type=str, help="Install new VM-Plugin")
-    parser.add_argument("remove", action="store", type=str, help="Remove an existing VM-Plugin")
+    parser.add_argument("uninstall", action="store", type=str, help="Remove an existing VM-Plugin")
     parser.add_argument("enable", action="store", type=str, help="Enable VM-Plugin")
     parser.add_argument("disable", action="store", type=str, help="Disable VM-Plugin")
 
@@ -39,23 +37,23 @@ def main():
     args = get_args()
 
     if args.list:
-        # Print all plugin names
-        for plugin in vmpie._plugins:
-            print plugin._name
+        # Print all plugin names and their compatible operating systems
+        for plugin in vmpie._plugin_manager.plugins:
+            print plugin
 
     elif args.install:
         # Copy the plugin file to vmpie's plugin folder
-        shutil.copy2(args.add, USER_PLUGIN_FOLDER)
+        vmpie._plugin_manager.install_plugin(args.install)
 
-    elif args.remove:
+    elif args.uninstall:
         # Delete the file
         try:
-            os.remove(args.remove)
+            vmpie._plugin_manager.install_plugin(args.uninstall)
         except OSError:
             print "ERROR: Plugin {name} is not installed.".format(name=args.remove)
 
     elif args.enable:
-        pass
+        vmpie._plugin_manager.enable_plugin(args.enable)
 
     elif args.disable:
-        pass
+        vmpie._plugin_manager.disable_plugin(args.disable)
