@@ -10,16 +10,16 @@ from pyVim.connect import SmartConnect, Disconnect
 import vmpie
 import consts
 import utils
-from folder import Folder
-from virtual_machine import VirtualMachine
-from vmpie_exceptions import NotConnectedException
+import folder
+import virtual_machine
+import vmpie_exceptions
 
-def connected(f):
+def connected(func):
     def wrapper(*args, **kwargs):
         vcenter = utils.get_vcenter()
         if vcenter.is_connected():
-            return f(*args, **kwargs)
-        raise NotConnectedException
+            return func(*args, **kwargs)
+        raise vmpie_exceptions.NotConnectedException
     return wrapper
 
 class VCenter(object):
@@ -115,7 +115,7 @@ class VCenter(object):
         self._connection.content.sessionManager.Logout()
 
     def get_vm(self, vm_name):
-        return VirtualMachine(vm_name)
+        return virtual_machine.VirtualMachine(vm_name)
 
     def get_all_vms(self):
         container_view = self._connection.content.viewManager.CreateContainerView(
@@ -127,15 +127,15 @@ class VCenter(object):
         vms = []
 
         for vm in children:
-            vms.append(VirtualMachine(vm.name, _pyVmomiVM=vm))
+            vms.append(virtual_machine.VirtualMachine(vm.name, _pyVmomiVM=vm))
 
         return vms
 
     def get_folder(self, folder_name):
-        return Folder(folder_name)
+        return folder.Folder(folder_name)
 
     def get_machines_by_folder(self, folder_name):
-        return Folder(folder_name).vms
+        return folder.Folder(folder_name).vms
 
     def backup(self):
         folders = utils._create_folder_tree()

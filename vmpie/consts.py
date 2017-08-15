@@ -8,15 +8,14 @@ SUCCESS_STATE = 'success'
 DEFAULT_GUEST_USERNAME = 'CSI-USER'
 DEFAULT_GUEST_PASSWORD = 'Password1!'
 #TODO: Test if it works
-DEFAULT_PLUGIN_DIRECTORY = path.join(path.dirname(__file__), "plugins")
 PYTHON_FILE_REGEX = "^.+\.py$"
 VM_PLUGIN_REGEX = "^.+Plugin$"
-USER_PLUGIN_FOLDER = ""
 
 
 
 # Plugin Config File
-PLUGINS_CONFIG_FILE = path.join(".", "plugins.cfg")
+USER_PLUGIN_FOLDER = "/Users/corylevy/Projects/vmpie/vmpie/plugins"
+PLUGINS_CONFIG_FILE = path.join(USER_PLUGIN_FOLDER, "plugins.cfg")
 PLUGIN_ENABLED_ATTRIBUTE = "enabled"
 PLUGIN_PATH_ATTRIBUTE = "path"
 PLUGIN_NAME_ATTRIBUTE = "name"

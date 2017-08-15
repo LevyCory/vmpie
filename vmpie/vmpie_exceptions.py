@@ -1,11 +1,11 @@
 __author__ = 'avital'
 
 
-class VmwareToolsException(Exception):
+class VMWareToolsException(Exception):
     message = "Vmware tools are not running."
 
     def __init__(self):
-        super(VmwareToolsException, self).__init__(self.message)
+        super(VMWareToolsException, self).__init__(self.message)
 
 
 class ObjectNotFoundException(Exception):

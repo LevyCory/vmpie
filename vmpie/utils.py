@@ -3,10 +3,10 @@ from pyvmomi_tools import cli
 import time
 import logging
 
-import vmpie_exceptions
 import folder
 import vcenter
 import consts
+import vmpie_exceptions
 
 
 def get_vcenter():
@@ -117,7 +117,7 @@ def run_command_in_vm(vm, command, arguments, credentials):
         except AttributeError:
             raise vmpie_exceptions.NotConnectedException
     else:
-        raise vmpie_exceptions.VmwareToolsException
+        raise vmpie_exceptions.VMWareToolsException
 
 
 def _create_folder_tree(root_folder=None):
@@ -170,3 +170,5 @@ def bytes_to_human(size, suffix='B'):
             return "%3.1f%s%s" % (size, unit, suffix)
         size /= 1024
     return "%.1f%f%f" % (size, unit, suffix)
+
+

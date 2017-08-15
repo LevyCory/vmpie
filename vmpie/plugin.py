@@ -12,14 +12,13 @@ class Plugin(object):
     Represent a VM plugin.
     In order to write VM plugins you must derive from this class, name your class <Plugin Name>Plugin
     and define its name and compatible operating systems.
-    The name must be defined in the inherited attribute I{_name), and the os must be added to the list I{_os)
+    The name must be defined in the inherited attribute I{_name}, and the os must be added to the list I{_os}
     """
     _os = []
     _name = None
 
     def __init__(self, vm):
         self.vm = vm
-
     def __str__(self):
         return "<Plugin {name} for {os}>".format(name=self._name, os=str(self._os))
 
@@ -29,10 +28,11 @@ class Plugin(object):
 
 class PluginManager(object):
     """
-
+    Singleton.
     """
     def __init__(self):
-        self.config = SafeConfigParser().read("")
+        self._config = SafeConfigParser()
+        self._config.read(consts.PLUGINS_CONFIG_FILE)
 
     def _write_config(self):
         """
@@ -40,7 +40,7 @@ class PluginManager(object):
         @return:
         """
         with open(consts.PLUGINS_CONFIG_FILE, "w") as cfg:
-            self.config.write(cfg)
+            self._config.write(cfg)
 
     def _get_plugins(self, module):
         """
@@ -64,17 +64,12 @@ class PluginManager(object):
         return plugins
 
     @property
-    def enabled_plugins(self):
+    def enabled_plugin_names(self):
         """
 
         @return:
         """
-        enabled_plugins = []
-        for plugin in self.config.sections():
-            if self.config.get(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE):
-                enabled_plugins.append(plugin)
-
-        return enabled_plugins
+        return {plugin["name"] for plugin in self.plugins if plugin["enabled"]}
 
     @property
     def plugins(self):
@@ -82,14 +77,24 @@ class PluginManager(object):
 
         @return:
         """
-        return {self.config.get(section, consts.PLUGIN_NAME_ATTRIBUTE) for section in self.config.sections()}
+        plugins = []
+        for section in self._config.sections():
+            plugins.append({
+                "class": section,
+                "name": self._config.get(section, consts.PLUGIN_NAME_ATTRIBUTE),
+                "os": self._config.get(section, consts.PLUGIN_OS_ATTRIBUTE),
+                "enabled": eval(self._config.get(section, consts.PLUGIN_OS_ATTRIBUTE)),
+                # "file": self.config.get(consts.)
+            })
+
+        return plugins
 
     def is_plugin_enabled(self, plugin):
         """
 
         @return:
         """
-        return eval(self.config.get(plugin.__class__.__name__, consts.PLUGIN_ENABLED_ATTRIBUTE))
+        return eval(self._config.get(plugin.__class__.__name__, consts.PLUGIN_ENABLED_ATTRIBUTE))
 
     def is_plugin_valid(self, plugin):
         """
@@ -115,11 +120,11 @@ class PluginManager(object):
         shutil.copy(module_path, "")
         plugins = self._get_plugins(module_path)
         for plugin in plugins:
-            self.config.add_section(plugin.__class__.__name__)
-            self.config.set(plugin._name, consts.PLUGIN_ENABLED_ATTRIBUTE, True)
-            self.config.set(plugin._name, consts.PLUGIN_PATH_ATTRIBUTE, module_path)
-            self.config.set(plugin._name, consts.PLUGIN_NAME_ATTRIBUTE, plugin._name)
-            self.config.set(plugin._name, consts.PLUGIN_OS_ATTRIBUTE, plugin._os)
+            self._config.add_section(plugin.__class__.__name__)
+            self._config.set(plugin._name, consts.PLUGIN_ENABLED_ATTRIBUTE, True)
+            self._config.set(plugin._name, consts.PLUGIN_PATH_ATTRIBUTE, module_path)
+            self._config.set(plugin._name, consts.PLUGIN_NAME_ATTRIBUTE, plugin._name)
+            self._config.set(plugin._name, consts.PLUGIN_OS_ATTRIBUTE, plugin._os)
         self._write_config()
 
     def uninstall_plugin(self, module_path):
@@ -130,7 +135,7 @@ class PluginManager(object):
         """
         pass
 
-    def _collect_plugins(self):
+    def collect_plugins(self):
         """
         Collect all plugins from the given directories.
         @param directories: The directories to collect the plugins from.
@@ -142,9 +147,9 @@ class PluginManager(object):
         """
         plugins = []
 
-        for section in self.config.sections():
-            if self.config.get(section, consts.PLUGIN_ENABLED_ATTRIBUTE) == "True":
-                file_path = self.config.get(section, consts.PLUGIN_PATH_ATTRIBUTE)
+        for section in self._config.sections():
+            if self._config.get(section, consts.PLUGIN_ENABLED_ATTRIBUTE) == "True":
+                file_path = self._config.get(section, consts.PLUGIN_PATH_ATTRIBUTE)
                 base_name = os.path.basename(file_path)
                 mod = imp.load_source(base_name, file_path)
                 plugins.extend(self._get_plugins(mod))
@@ -156,9 +161,9 @@ class PluginManager(object):
         @param plugin_name:
         @return:
         """
-        for plugin in self.config.sections:
-            if self.config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
-                self.config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, False)
+        for plugin in self._config.sections:
+            if self._config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
+                self._config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, False)
 
         self._write_config()
 
@@ -168,9 +173,9 @@ class PluginManager(object):
         @param plugin_name:
         @return:
         """
-        for plugin in self.config.sections:
-            if self.config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
-                self.config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, False)
+        for plugin in self._config.sections:
+            if self._config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
+                self._config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, False)
 
         self._write_config()
 

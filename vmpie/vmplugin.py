@@ -39,7 +39,7 @@ def main():
     if args.list:
         # Print all plugin names and their compatible operating systems
         for plugin in vmpie._plugin_manager.plugins:
-            print plugin
+            print plugin["name"]
 
     elif args.install:
         # Copy the plugin file to vmpie's plugin folder

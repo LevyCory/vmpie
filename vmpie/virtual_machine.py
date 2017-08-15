@@ -2,12 +2,12 @@ import os
 
 from pyVmomi import vim
 
+import vmpie
 import utils
 import consts
 import folder  # To prevent import loops
-from vmpie import _plugins
-from vcenter import connected
-from hardware import HardwarePlugin
+import vcenter
+import hardware
 
 
 class VirtualMachine(object):
@@ -60,7 +60,7 @@ class VirtualMachine(object):
             pass
 
         # Hardware must be a part of the object
-        self.hardware = HardwarePlugin(self)
+        self.hardware = hardware.HardwarePlugin(self)
 
         # Load collected plugins if they're compatible with the guest OS
         for plugin in _plugins:
@@ -89,7 +89,7 @@ class VirtualMachine(object):
         setattr(self, plugin._name, plugin(self))
 
     @property
-    @connected
+    @vcenter.connected
     def parent(self):
         if not isinstance(self._parent, folder.Folder) or self._parent._moId != self._pyVmomiVM.parent._moId:
             self._parent = folder.Folder(folder_name=self._pyVmomiVM.parent.name, _pyVmomiFolder=self._pyVmomiVM.parent)
