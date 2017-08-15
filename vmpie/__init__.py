@@ -3,7 +3,6 @@ import pkg_resources
 import logging
 import requests
 import plugin
-import vcenter
 
 
 requests.packages.urllib3.disable_warnings()

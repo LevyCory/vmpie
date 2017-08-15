@@ -6,8 +6,8 @@ import vmpie
 import utils
 import consts
 import folder  # To prevent import loops
-import vcenter
 import hardware
+from decorators import connected
 
 
 class VirtualMachine(object):
@@ -89,7 +89,7 @@ class VirtualMachine(object):
         setattr(self, plugin._name, plugin(self))
 
     @property
-    @vcenter.connected
+    @connected
     def parent(self):
         if not isinstance(self._parent, folder.Folder) or self._parent._moId != self._pyVmomiVM.parent._moId:
             self._parent = folder.Folder(folder_name=self._pyVmomiVM.parent.name, _pyVmomiFolder=self._pyVmomiVM.parent)

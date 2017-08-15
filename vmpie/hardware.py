@@ -3,8 +3,7 @@ import logging
 from pyVmomi import vim
 
 import plugin
-import vcenter
-
+from decorators import connected
 
 # TODO: Document all plugin methods
 class HardwarePlugin(plugin.Plugin):
@@ -14,32 +13,32 @@ class HardwarePlugin(plugin.Plugin):
     _name = "hardware"
     _os = ["nt", "unix"]
 
-    @vcenter.connected
+    @connected
     def power_on(self):
         logging.info('Powering on vm {vm}'.format(vm=self.vm.name))
         self.vm.pyVmomiVM.PowerOnVM_Task()
 
-    @vcenter.connected
+    @connected
     def power_off(self):
         logging.info('Powering off vm {vm}'.format(vm=self.vm.name))
         self.vm.pyVmomiVM.PowerOffVM_Task()
 
-    @vcenter.connected
+    @connected
     def shutdown(self):
         logging.info('Shutdown vm {vm}'.format(vm=self.vm.name))
         self.vm.pyVmomiVM.ShutdownGuest()
 
-    @vcenter.connected
+    @connected
     def reboot(self):
         logging.info('Restarting guest in vm {vm}'.format(vm=self.vm.name))
         self.vm.pyVmomiVM.RebootGuest()
 
-    @vcenter.connected
+    @connected
     def hard_reboot(self):
         logging.info('Restarting vm {vm}'.format(vm=self.vm.name))
         self.vm.pyVmomiVM.ResetVM_Task()
 
-    @vcenter.connected
+    @connected
     def rename(self, new_vm_name):
         logging.info('Renaming vm {vm} to {new_name}'.format(vm=self.vm.name, new_name=new_vm_name))
         self.vm.pyVmomiVM.Rename_Task(new_vm_name)
