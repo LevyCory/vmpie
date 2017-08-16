@@ -14,7 +14,8 @@ VM_PLUGIN_REGEX = "^.+Plugin$"
 
 
 # Plugin Config File
-USER_PLUGIN_FOLDER = "/Users/corylevy/Projects/vmpie/vmpie/plugins"
+# TODO: make ot cross platform and not hardcoded
+USER_PLUGIN_FOLDER = "/Users/corylevy/Projects/vmpie/plugins"
 PLUGINS_CONFIG_FILE = path.join(USER_PLUGIN_FOLDER, "plugins.cfg")
 PLUGIN_ENABLED_ATTRIBUTE = "enabled"
 PLUGIN_PATH_ATTRIBUTE = "path"

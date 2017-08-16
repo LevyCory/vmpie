@@ -13,33 +13,39 @@ import argparse
 import vmpie
 
 # ==================================================== CONSTANTS ===================================================== #
+
+PLUGIN_PRINT_FORMAT = "{path} -> {plugin_name}"
+
 # ===================================================== GLOBALS ====================================================== #
 # ===================================================== CLASSES ====================================================== #
 # ==================================================== FUNCTIONS ===================================================== #
 
 
-def get_args():
+def get_arg_parser():
     """
+    Return an argument parser object for processing command line arguments.
+    @return: Argument parser.
+    @rtype: I{argparse.ArgumentParser}
     """
     parser = argparse.ArgumentParser("The VM-Plugin manager")
-    parser.add_argument("list", action="store_true", type=bool, help="List all installed VM-Plugins")
-    parser.add_argument("install", action="store", type=str, help="Install new VM-Plugin")
-    parser.add_argument("uninstall", action="store", type=str, help="Remove an existing VM-Plugin")
-    parser.add_argument("enable", action="store", type=str, help="Enable VM-Plugin")
-    parser.add_argument("disable", action="store", type=str, help="Disable VM-Plugin")
 
-    return parser.parse_args()
+    parser.add_argument("-i", "--install", help="Install new VM-Plugin")
+    parser.add_argument("-u", "--uninstall", help="Remove an existing VM-Plugin")
+    parser.add_argument("-e", "--enable", help="Enable VM-Plugin")
+    parser.add_argument("-d", "--disable", help="Disable VM-Plugin")
+    parser.add_argument("-l", "--list", action="store_true", help="List all installed VM-Plugins")
+
+    return parser
 
 
 def main():
-    """
-    """
-    args = get_args()
+    arg_parser = get_arg_parser()
+    args = arg_parser.parse_args()
 
     if args.list:
         # Print all plugin names and their compatible operating systems
-        for plugin in vmpie._plugin_manager.plugins:
-            print plugin["name"]
+        for plugin in vmpie._plugin_manager.plugin_data:
+            print PLUGIN_PRINT_FORMAT.format(plugin_name=plugin["name"], path=plugin["file"])
 
     elif args.install:
         # Copy the plugin file to vmpie's plugin folder
@@ -57,3 +63,10 @@ def main():
 
     elif args.disable:
         vmpie._plugin_manager.disable_plugin(args.disable)
+
+    else:
+        arg_parser.print_help()
+
+
+if __name__ == '__main__':
+    main()
