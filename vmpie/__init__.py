@@ -1,9 +1,9 @@
 __author__ = 'avital'
-import pkg_resources
 import logging
-import requests
-import plugin
 
+import pkg_resources
+import plugin
+import requests
 
 requests.packages.urllib3.disable_warnings()
 logging.getLogger('requests.packages.urllib3').setLevel(logging.CRITICAL)

@@ -2,12 +2,12 @@ import os
 
 from pyVmomi import vim
 
-import vmpie
-import utils
 import consts
 import folder  # To prevent import loops
-import hardware
+import utils
+import vmpie
 from decorators import connected
+from vmpie.builtin_plugins import hardware
 
 
 class VirtualMachine(object):
@@ -59,11 +59,8 @@ class VirtualMachine(object):
             # TODO: Usually cause when a vm doesnt exist anymore. What should we do?
             pass
 
-        # Hardware must be a part of the object
-        self.hardware = hardware.HardwarePlugin(self)
-
         # Load collected plugins if they're compatible with the guest OS
-        for plugin in _plugins:
+        for plugin in vmpie._plugins:
             if self._is_plugin_compatible(plugin):
                 self.load_plugin(plugin)
 
@@ -78,7 +75,7 @@ class VirtualMachine(object):
         @return: Whether the plugin is compatible with the guest OS or not.
         @rtype: I{boolean}
         """
-        return self.hardware.get_os_name() in plugin._os
+        return self.remote.os.name in plugin._os
 
     def load_plugin(self, plugin):
         """

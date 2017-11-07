@@ -13,7 +13,7 @@ import imp
 import shutil
 from ConfigParser import SafeConfigParser
 
-import consts
+import vmpie.consts
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -44,16 +44,19 @@ class PluginManager(object):
     """
     def __init__(self):
         self._config = SafeConfigParser()
-        self._config.read(consts.PLUGINS_CONFIG_FILE)
+        self._config.read([vmpie.consts.BUILTIN_PLUGINS_CONFIG_FILE, vmpie.consts.PLUGINS_CONFIG_FILE])
 
         # Append the plugin directory to the $PATH to import plugins easily
-        sys.path.append(consts.USER_PLUGIN_FOLDER)
+        sys.path.append(vmpie.consts.BUILTIN_PLUGIN_FOLDER)
+
+        # Append the plugin directory to the $PATH to import plugins easily
+        sys.path.append(vmpie.consts.USER_PLUGIN_FOLDER)
 
     def _write_config(self):
         """
         Save changes to the configuration file.
         """
-        with open(consts.PLUGINS_CONFIG_FILE, "w") as cfg:
+        with open(vmpie.consts.PLUGINS_CONFIG_FILE, "w") as cfg:
             self._config.write(cfg)
 
     def _get_plugins(self, module, enabled_only=True):
@@ -70,7 +73,7 @@ class PluginManager(object):
 
         for attribute in dir(module):
             # Check if the class name is a valid plugin name
-            if re.match(consts.VM_PLUGIN_REGEX, attribute):
+            if re.match(vmpie.consts.VM_PLUGIN_REGEX, attribute):
                 plugin = getattr(module, attribute)
 
                 # Validate plugin
@@ -104,10 +107,10 @@ class PluginManager(object):
         @return:
         """
         section = self._config.add_section(plugin.__class__.__name__)
-        self._config.set(section, consts.PLUGIN_NAME_ATTRIBUTE, plugin._name)
-        self._config.set(section, consts.PLUGIN_ENABLED_ATTRIBUTE, True)
-        self._config.set(section, consts.PLUGIN_OS_ATTRIBUTE, plugin._os)
-        self._config.set(section, consts.PLUGIN_PATH_ATTRIBUTE, module_path)
+        self._config.set(section, vmpie.consts.PLUGIN_NAME_ATTRIBUTE, plugin._name)
+        self._config.set(section, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE, True)
+        self._config.set(section, vmpie.consts.PLUGIN_OS_ATTRIBUTE, plugin._os)
+        self._config.set(section, vmpie.consts.PLUGIN_PATH_ATTRIBUTE, module_path)
 
         self._write_config()
 
@@ -150,10 +153,10 @@ class PluginManager(object):
         for plugin in self._config.sections():
             plugins.append({
                 "class": plugin,
-                "name": self._config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE),
-                "os": self._config.get(plugin, consts.PLUGIN_OS_ATTRIBUTE),
-                "enabled": eval(self._config.get(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE)),
-                "file": self._config.get(plugin, consts.PLUGIN_PATH_ATTRIBUTE)
+                "name": self._config.get(plugin, vmpie.consts.PLUGIN_NAME_ATTRIBUTE),
+                "os": self._config.get(plugin, vmpie.consts.PLUGIN_OS_ATTRIBUTE),
+                "enabled": eval(self._config.get(plugin, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE)),
+                "file": self._config.get(plugin, vmpie.consts.PLUGIN_PATH_ATTRIBUTE)
             })
 
         return plugins
@@ -164,7 +167,7 @@ class PluginManager(object):
         @return: Whether a plugin is enabled or not.
         @rtype: I{boolean}
         """
-        return eval(self._config.get(plugin.__name__, consts.PLUGIN_ENABLED_ATTRIBUTE))
+        return eval(self._config.get(plugin.__name__, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE))
 
     def is_plugin_valid(self, plugin):
         """
@@ -192,11 +195,11 @@ class PluginManager(object):
         @type: I{string}
         """
         # Copy the file to the plugin directory
-        shutil.copy(module_path, consts.USER_PLUGIN_FOLDER)
+        shutil.copy(module_path, vmpie.consts.USER_PLUGIN_FOLDER)
 
         # Construct the new file path
         base_name = os.path.basename(module_path)
-        new_module_location = os.path.join(consts.USER_PLUGIN_FOLDER, base_name)
+        new_module_location = os.path.join(vmpie.consts.USER_PLUGIN_FOLDER, base_name)
 
         # Load the new module
         module_obj = self._load_module_by_name(new_module_location)
@@ -229,8 +232,8 @@ class PluginManager(object):
 
         for plugin in self._config.sections():
             # If the plugin is enabled, load it from it's module and add it to the list
-            if eval(self._config.get(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE)):
-                file_path = self._config.get(plugin, consts.PLUGIN_PATH_ATTRIBUTE)
+            if eval(self._config.get(plugin, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE)):
+                file_path = self._config.get(plugin, vmpie.consts.PLUGIN_PATH_ATTRIBUTE)
 
                 # Load the module
                 module_obj = self._load_module_by_name(file_path)
@@ -248,9 +251,9 @@ class PluginManager(object):
         """
         # Find the desired plugin
         for plugin in self._config.sections():
-            if self._config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
+            if self._config.get(plugin, vmpie.consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
                 # Set the plugin state to 'enabled'
-                self._config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, "True")
+                self._config.set(plugin, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE, "True")
 
         # Save the configuration changes
         self._write_config()
@@ -263,9 +266,9 @@ class PluginManager(object):
         """
         # Find the desired plugin
         for plugin in self._config.sections():
-            if self._config.get(plugin, consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
+            if self._config.get(plugin, vmpie.consts.PLUGIN_NAME_ATTRIBUTE) == plugin_name:
                 # Set the plugin state to 'disabled'
-                self._config.set(plugin, consts.PLUGIN_ENABLED_ATTRIBUTE, "False")
+                self._config.set(plugin, vmpie.consts.PLUGIN_ENABLED_ATTRIBUTE, "False")
 
         # Save the configuration changes
         self._write_config()
