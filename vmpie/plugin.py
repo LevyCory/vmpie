@@ -1,6 +1,6 @@
 # ==================================================================================================================== #
 # File Name     : plugin.py
-# Purpose       : Provide all that you need to write and loan plugins.
+# Purpose       : Provide all that you need to write and load plugins.
 # Date Created  : 10/08/2017
 # Author        : Cory Levy
 # ==================================================================================================================== #
@@ -8,12 +8,17 @@
 
 import os
 import re
-import sys
 import imp
+import sys
 import shutil
 from ConfigParser import SafeConfigParser
 
 import vmpie.consts
+
+# ==================================================== CONSTANTS ===================================================== #
+
+UNIX = "posix"
+WINDOWS = "nt"
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -30,6 +35,7 @@ class Plugin(object):
 
     def __init__(self, vm):
         self.vm = vm
+
     def __str__(self):
         return "<Plugin {name} for {os}>".format(name=self._name, os=str(self._os))
 
@@ -114,6 +120,18 @@ class PluginManager(object):
 
         self._write_config()
 
+    def _collect_builtin_plugins(self):
+        """
+        """
+        plugins = []
+        for module in vmpie.consts.BUILTING_PLUGIN_FOLDER:
+            if module.endswith(vmpie.consts.PYTHON_FILE_EXTENSION):
+                location = os.path.join(vmpie.consts.BUILTIN_PLUGIN_FOLDER, module)
+                mod = imp.load_source("mod", location)
+                plugins.extend(self._get_plugins(mod))
+
+        return plugins
+
     @property
     def enabled_plugin_names(self):
         """
@@ -148,7 +166,7 @@ class PluginManager(object):
         @rtype: I{list of dictionaries}
         """
         plugins = []
-        
+
         # Iterate each plugin in the configuration file and create a dictionary with it's data.
         for plugin in self._config.sections():
             plugins.append({
@@ -182,9 +200,7 @@ class PluginManager(object):
         @return: Whether a plugin is valid or not.
         @rtype: I{boolean}
         """
-        if issubclass(plugin, Plugin):
-            return plugin._name is not None and len(plugin._os) > 0
-        return False
+        return issubclass(plugin, Plugin) and plugin._name is not None and len(plugin._os) > 0
 
     def install_plugin(self, module_path):
         """
@@ -220,7 +236,7 @@ class PluginManager(object):
         @param file_name: The name of the file to delete.
         @type file_name: I{string}
         """
-        pass
+        raise NotImplementedError
 
     def collect_plugins(self):
         """
@@ -228,7 +244,7 @@ class PluginManager(object):
         @return: The collected plugins.
         @rtype: I{list}
         """
-        plugins = []
+        plugins = self._collect_builtin_plugins()
 
         for plugin in self._config.sections():
             # If the plugin is enabled, load it from it's module and add it to the list
@@ -272,4 +288,3 @@ class PluginManager(object):
 
         # Save the configuration changes
         self._write_config()
-

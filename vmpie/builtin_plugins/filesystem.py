@@ -6,6 +6,7 @@ from vmpie import consts
 from vmpie import utils
 from vmpie import vmpie_exceptions
 import vmpie.plugin as plugin
+from remote import _RemoteFile
 
 
 # TODO: Document all plugin methods
@@ -16,7 +17,89 @@ class FilesystemPlugin(plugin.Plugin):
     _name = "filesystem"
     _os = [plugin.UNIX, plugin.WINDOWS]
 
-    def create_file(self, file_location, file_name, file_content):
+    def exists(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        return self.vm.remote.os.path.exists(path)
+
+    def create_file(self, path, content=""):
+        """
+
+        @param path:
+        @param content:
+        @return:
+        """
+        command = "open({path}, 'w') as f; f.write({data}); f.close()".format(path=path, data=content)
+        self.vm.remote.evaluate(command)
+
+    def is_file(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        return self.vm.remote.os.path.isfile(path)
+
+    def is_directory(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        return self.vm.remote.os.path.isdir(path)
+
+    def remove(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        if self.vm.filesystem.is_file(path):
+            self.vm.remote.os.remove(path)
+        else:
+            self.vm.remote.shutil.rmtree(path)
+
+    def create_directory(self, path, recursive=True):
+        """
+
+        @param path:
+        @param recursive:
+        @return:
+        """
+        if recursive:
+            self.vm.remote.os.makedirs(path)
+        else:
+            self.vm.remote.os.mkdir(path)
+
+    def get_file_md5(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        raise NotImplementedError
+
+    def get_file_checksum(self, path):
+        """
+
+        @param path:
+        @return:
+        """
+        raise NotImplementedError
+
+    def open(self, path, mode):
+        """
+
+        @param path:
+        @param mode:
+        @return:
+        """
+        return _RemoteFile(path, mode, self.vm._pyro_daemon)
+
+    def offline_create_file(self, file_location, file_name, file_content):
 
         creds = vim.vm.guest.NamePasswordAuthentication(
             username=self.vm.username,

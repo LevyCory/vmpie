@@ -7,11 +7,10 @@ SUCCESS_RESPONSE_CODE = 200
 SUCCESS_STATE = 'success'
 DEFAULT_GUEST_USERNAME = 'CSI-USER'
 DEFAULT_GUEST_PASSWORD = 'Password1!'
-#TODO: Test if it works
+# TODO: Test if it works
+PYTHON_FILE_EXTENSION = ".py"
 PYTHON_FILE_REGEX = "^.+\.py$"
 VM_PLUGIN_REGEX = "^.+Plugin$"
-
-
 
 # Plugin Config File
 # TODO: make ot cross platform and not hardcoded
@@ -23,3 +22,5 @@ PLUGIN_ENABLED_ATTRIBUTE = "enabled"
 PLUGIN_PATH_ATTRIBUTE = "path"
 PLUGIN_NAME_ATTRIBUTE = "name"
 PLUGIN_OS_ATTRIBUTE = "os"
+DEFAULT_SERIALIZER = "pickle"
+

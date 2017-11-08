@@ -1,17 +1,17 @@
 import logging
 
-import vmpie.plugin
+import vmpie.plugin as plugin
 from pyVmomi import vim
 from vmpie.decorators import connected
 
 
 # TODO: Document all plugin methods
-class HardwarePlugin(vmpie.plugin.Plugin):
+class HardwarePlugin(plugin.Plugin):
     """
     Provide basic hardware functionality. This is the most basic wrapper of pyVmomi objects.
     """
     _name = "hardware"
-    _os = ["nt", "unix"]
+    _os = [plugin.UNIX, plugin.WINDOWS]
 
     @connected
     def power_on(self):
