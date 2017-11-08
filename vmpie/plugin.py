@@ -124,11 +124,11 @@ class PluginManager(object):
         """
         """
         plugins = []
-        for module in vmpie.consts.BUILTING_PLUGIN_FOLDER:
+        for module in os.listdir(vmpie.consts.BUILTIN_PLUGIN_FOLDER)[::-1]:
             if module.endswith(vmpie.consts.PYTHON_FILE_EXTENSION):
                 location = os.path.join(vmpie.consts.BUILTIN_PLUGIN_FOLDER, module)
                 mod = imp.load_source("mod", location)
-                plugins.extend(self._get_plugins(mod))
+                plugins.extend(self._get_plugins(mod, enabled_only=False))
 
         return plugins
 

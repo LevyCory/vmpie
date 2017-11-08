@@ -7,7 +7,7 @@ import folder  # To prevent import loops
 import utils
 import vmpie
 from decorators import connected
-from vmpie.builtin_plugins import hardware
+from vmpie.builtin_plugins.remote import RemotePlugin
 
 
 class VirtualMachine(object):
@@ -58,6 +58,8 @@ class VirtualMachine(object):
         except AttributeError:
             # TODO: Usually cause when a vm doesnt exist anymore. What should we do?
             pass
+
+        self.remote = RemotePlugin(self)
 
         # Load collected plugins if they're compatible with the guest OS
         for plugin in vmpie._plugins:

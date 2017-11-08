@@ -13,8 +13,8 @@ class RemotePlugin(plugin.Plugin):
     def __init__(self, vm):
         """
         """
-        super(RemotePlugin, self).__init__(vm)
-
+        # super(RemotePlugin, self).__init__(vm)
+        self.vm = vm
         self.vm._pyro_daemon = self.connect()
         self.vm._pyro_daemon.execute("import inspect")
 
@@ -47,8 +47,8 @@ class RemotePlugin(plugin.Plugin):
     def _get_modules(self):
         """
         """
-        self.vm._pyro_deamon.execute("import pkgutil")
-        return self.vm._pyro_deamon.evaluate("[p[1] for p in pkgutil.iter_modules()]")
+        self.vm._pyro_daemon.execute("import pkgutil")
+        return self.vm._pyro_daemon.evaluate("[p[1] for p in pkgutil.iter_modules()]")
 
 
 class _RemoteModule(object):
@@ -63,15 +63,15 @@ class _RemoteModule(object):
         """
         """
         if not self._imported:
-            self._vm._pyro_deamon.execute("import %s" % self._name)
+            self._vm._pyro_daemon.execute("import %s" % self._name)
             self._imported = True
-        if self._vm._pyro_deamon.evaluate(
+        if self._vm._pyro_daemon.evaluate(
                         "inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self._vm)
-        elif self._vm._pyro_deamon.evaluate(
+        elif self._vm._pyro_daemon.evaluate(
                         "callable(%s.%s)" % (self._name, item)):
             return _RemoteFunction(".".join([self._name, item]), self._vm)
-        return self._vm._pyro_deamon.evaluate("%s.%s" % (self._name, item))
+        return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
 class _RemoteSubModule(object):
@@ -82,13 +82,13 @@ class _RemoteSubModule(object):
         self._vm = vm
 
     def __getattr__(self, item):
-        if self._vm._pyro_deamon.evaluate(
+        if self._vm._pyro_daemon.evaluate(
                         "inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self._vm)
-        elif self._vm._pyro_deamon.evaluate(
+        elif self._vm._pyro_daemon.evaluate(
                         "inspect.isfunction(%s.%s)" % (self._name, item)):
             return _RemoteFunction(".".join([self._name, item]), self._vm)
-        return self._vm._pyro_deamon.evaluate("%s.%s" % (self._name, item))
+        return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
 class _RemoteFunction(object):
@@ -99,8 +99,8 @@ class _RemoteFunction(object):
         self._vm = vm
 
     def __call__(self, *args, **kwargs):
-        return self._vm._pyro_deamon.invokeModule(self._name, args, kwargs)
-        # return self._vm._pyro_deamon.evaluate("%s()", %self.name)
+        return self._vm._pyro_daemon.invokeModule(self._name, args, kwargs)
+        # return self._vm._pyro_daemon.evaluate("%s()", %self.name)
         # Need to handle args too
 
 class _RemoteFile(object):
