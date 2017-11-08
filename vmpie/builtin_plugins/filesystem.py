@@ -5,16 +5,16 @@ from pyVmomi import vim
 from vmpie import consts
 from vmpie import utils
 from vmpie import vmpie_exceptions
-from vmpie.plugin import Plugin
+import vmpie.plugin as plugin
 
 
-#TODO: Document all plugin methods
-class NTFilesystemPlugin(Plugin):
+# TODO: Document all plugin methods
+class FilesystemPlugin(plugin.Plugin):
     """
     Filesystem operations for windows systems
     """
     _name = "filesystem"
-    _os = ["nt"]
+    _os = [plugin.UNIX, plugin.WINDOWS]
 
     def create_file(self, file_location, file_name, file_content):
 
@@ -104,11 +104,3 @@ class NTFilesystemPlugin(Plugin):
     def download_file(self):
         pass
 
-
-# TODO: Implement the unix filesystem plugin
-class UnixFilesystem(Plugin):
-    """
-
-    """
-    _name = "filesystem"
-    _os = ["unix"]
