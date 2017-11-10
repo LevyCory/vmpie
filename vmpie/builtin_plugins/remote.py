@@ -103,6 +103,7 @@ class _RemoteFunction(object):
         # return self._vm._pyro_daemon.evaluate("%s()", %self.name)
         # Need to handle args too
 
+
 class _RemoteFile(object):
     """
 
@@ -112,6 +113,20 @@ class _RemoteFile(object):
         self._name = "file_{id}".format(id=uuid.uuid4().get_hex())
 
         self.__daemon.execute("{name} = open('{path}', '{mode}')".format(name=self._name, path=path, mode=mode))
+
+    def __enter__(self):
+        """
+
+        @return:
+        """
+        raise NotImplementedError
+
+    def __exit__(self):
+        """
+
+        @return:
+        """
+        raise NotImplementedError
 
     def close(self):
         """
@@ -126,7 +141,7 @@ class _RemoteFile(object):
 
         @return:
         """
-        return self.__daemon.execute("{name}.closed".format(name=self._name))
+        return self.__daemon.evaluate("{name}.closed".format(name=self._name))
 
     @property
     def encoding(self):
@@ -134,14 +149,14 @@ class _RemoteFile(object):
 
         @return:
         """
-        return self.__daemon.execute("{name}.encoding".format(name=self._name))
+        return self.__daemon.evaluate("{name}.encoding".format(name=self._name))
 
     def fileno(self):
         """
 
         @return:
         """
-        return self.__daemon.execute("{name}.fileno()".format(name=self._name))
+        return self.__daemon.evaluate("{name}.fileno()".format(name=self._name))
 
     def write(self, data):
         """
@@ -167,14 +182,14 @@ class _RemoteFile(object):
         if size is None:
             size = ""
 
-        return self.__daemon.execute("{name}.read({size})".format(name=self._name, size=size))
+        return self.__daemon.evaluate("{name}.read({size})".format(name=self._name, size=size))
 
     def readlines(self, sequence):
         """
 
         @return:
         """
-        return self.__daemon.execute("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
+        return self.__daemon.evaluate("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
 
     def flush(self):
         pass
@@ -184,5 +199,3 @@ class _RemoteFile(object):
 
     def tell(self):
         pass
-
-
