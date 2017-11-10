@@ -119,14 +119,14 @@ class _RemoteFile(object):
 
         @return:
         """
-        raise NotImplementedError
+        return self
 
-    def __exit__(self):
+    def __exit__(self, *args):
         """
 
         @return:
         """
-        raise NotImplementedError
+        self.close()
 
     def close(self):
         """
