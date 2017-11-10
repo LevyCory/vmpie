@@ -1,61 +1,80 @@
-import logging
+# ==================================================================================================================== #
+# File Name     : filesystem.py
+# Purpose       : Provide a convenient way to perform filesystem related operations on virtual machines.
+# Date Created  : 11/11/2017
+# Author        : Avital Livshits, Cory Levy
+# ==================================================================================================================== #
+# ===================================================== IMPORTS ====================================================== #
 
+import hashlib
+import logging
 import requests
+
 from pyVmomi import vim
+
 from vmpie import consts
 from vmpie import utils
 from vmpie import vmpie_exceptions
 import vmpie.plugin as plugin
 from remote import _RemoteFile
 
+# ==================================================== CONSTANTS ===================================================== #
+# ===================================================== CLASSES ====================================================== #
 
-# TODO: Document all plugin methods
+
 class FilesystemPlugin(plugin.Plugin):
     """
-    Filesystem operations for windows systems
+    Filesystem operations on virtual machines.
     """
     _name = "filesystem"
     _os = [plugin.UNIX, plugin.WINDOWS]
 
     def exists(self, path):
         """
-
-        @param path:
-        @return:
+        Check if a path exists on the target machine.
+        @param path: The path to check
+        @type path: I{str}
+        @return: Whether the path exists or not
+        @rtype: I{bool}
         """
         return self.vm.remote.os.path.exists(path)
 
     def create_file(self, path, content=""):
         """
-
-        @param path:
-        @param content:
-        @return:
+        Create a file on the target machine.
+        @param path: The path of the file to create
+        @type path: I{str}
+        @param content: The content of the file to create
+        @type content: I{str}
         """
-        command = "open({path}, 'w') as f; f.write({data}); f.close()".format(path=path, data=content)
-        self.vm.remote.evaluate(command)
+        with self.open(path, "w") as remote_file:
+            remote_file.write(content)
 
     def is_file(self, path):
         """
-
-        @param path:
-        @return:
+        Check if a path is a file on the target machine.
+        @param path: The path to check
+        @type path: I{str}
+        @return: Whether the path is a file or not
+        @rtype: I{bool}
         """
         return self.vm.remote.os.path.isfile(path)
 
     def is_directory(self, path):
         """
-
-        @param path:
-        @return:
+        Check if a path is a directory on the target machine.
+        @param path: The path to check
+        @type path: I{str}
+        @return: Whether the path is a directory or not
+        @rtype: I{bool}
         """
         return self.vm.remote.os.path.isdir(path)
 
     def remove(self, path):
         """
-
-        @param path:
-        @return:
+        Remove the file or folder located at I{path}
+        @param path: The path to remove
+        @type path: I{str}
         """
         if self.vm.filesystem.is_file(path):
             self.vm.remote.os.remove(path)
@@ -64,10 +83,11 @@ class FilesystemPlugin(plugin.Plugin):
 
     def create_directory(self, path, recursive=True):
         """
-
-        @param path:
-        @param recursive:
-        @return:
+        Create a directory on the target machine.
+        @param path: The path of the directory to create
+        @type path: I{str}
+        @param recursive: Whether or not to ensure the creation of all the directories in the given path
+        @type recursive: I{bool}
         """
         if recursive:
             self.vm.remote.os.makedirs(path)
@@ -76,11 +96,16 @@ class FilesystemPlugin(plugin.Plugin):
 
     def get_file_md5(self, path):
         """
-
-        @param path:
-        @return:
+        Calcualte a file's MD5 hash.
+        @param path: The path of the file to digest.
+        @type path: I{str}
+        @return: The MD5 digest of the file
+        @rtype: I{str}
         """
-        raise NotImplementedError
+        with self.open(path, "rb") as remote_file:
+            data = remote_file.read()
+
+        return hashlib.md5(data).hexdigest()
 
     def get_file_checksum(self, path):
         """
@@ -92,10 +117,13 @@ class FilesystemPlugin(plugin.Plugin):
 
     def open(self, path, mode):
         """
-
-        @param path:
-        @param mode:
-        @return:
+        Open a file on the remote machine. Behaves exactly like python's builtin I{open} function.
+        @param path: The path of the file to open
+        @type path: I{str}
+        @param mode: The mode to open the file in.
+        @type mode: I{str}
+        @return: The opened file.
+        @rtype: I{vmpie.remote._RemoteFile}
         """
         return _RemoteFile(path, mode, self.vm._pyro_daemon)
 
@@ -131,13 +159,7 @@ class FilesystemPlugin(plugin.Plugin):
             logging.error('An error occurred while creating the file',
                           exc_info=True)
 
-    def delete_file(self):
-        pass
-
-    def edit_file(self):
-        pass
-
-    def upload_file(self, local_file_path, path_in_vm):
+    def offline_upload_file(self, local_file_path, path_in_vm):
         if utils.is_vmware_tools_running:
             logging.info('Uploading file to vm {vm}'.format(vm=self.vm.name))
 
@@ -186,4 +208,3 @@ class FilesystemPlugin(plugin.Plugin):
 
     def download_file(self):
         pass
-
