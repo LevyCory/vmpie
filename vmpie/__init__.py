@@ -20,7 +20,5 @@ globals()["_plugin_manager"] = _temp_plugin_manager
 del _temp_plugin_manager
 
 
-
 def set_vcenter(vcenter):
     globals()['vcenter'] = vcenter
-

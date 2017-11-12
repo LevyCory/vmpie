@@ -1,3 +1,11 @@
+# ==================================================================================================================== #
+# File Name     : virtual_machine.py
+# Purpose       : Provide the object that represents virtual machines.
+# Date Created  : 12/11/2017
+# Author        : Avital Livshits, Cory Levy
+# ==================================================================================================================== #
+# ===================================================== IMPORTS ====================================================== #
+
 import os
 
 from pyVmomi import vim
@@ -8,6 +16,8 @@ import utils
 import vmpie
 from decorators import connected
 from vmpie.builtin_plugins.remote import RemotePlugin
+
+# ===================================================== CLASSES ====================================================== #
 
 
 class VirtualMachine(object):
@@ -59,6 +69,7 @@ class VirtualMachine(object):
             # TODO: Usually cause when a vm doesnt exist anymore. What should we do?
             pass
 
+        # TODO: Find a better way to do that
         self.remote = RemotePlugin(self)
 
         # Load collected plugins if they're compatible with the guest OS

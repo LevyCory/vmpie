@@ -1,11 +1,25 @@
-import Pyro4
+# ==================================================================================================================== #
+# File Name     : remote.py
+# Purpose       : Provide a convenient way to perform RPC operations on virtual machines.
+# Date Created  : 12/11/2017
+# Author        : Avital Livshits, Cory Levy
+# ==================================================================================================================== #
+# ===================================================== IMPORTS ====================================================== #
+
 import uuid
+
+import Pyro4
+
 import vmpie.consts as consts
 import vmpie.plugin as plugin
 
+# ===================================================== CLASSES ====================================================== #
 
+
+# TODO(Avital): Document
 class RemotePlugin(plugin.Plugin):
     """
+    Provide RPC operations to virtual machines.
     """
     _name = "remote"
     _os = [plugin.UNIX, plugin.WINDOWS]
@@ -13,7 +27,10 @@ class RemotePlugin(plugin.Plugin):
     def __init__(self, vm):
         """
         """
+        # TODO: Check why super fails
         # super(RemotePlugin, self).__init__(vm)
+
+        # TODO: Remove when super works
         self.vm = vm
         self.vm._pyro_daemon = self.connect()
         self.vm._pyro_daemon.execute("import inspect")
@@ -30,7 +47,7 @@ class RemotePlugin(plugin.Plugin):
 
     def execute(self, code):
         """
-
+        Execute code in the target machine.
         @param code:
         @return:
         """
@@ -38,7 +55,7 @@ class RemotePlugin(plugin.Plugin):
 
     def evaluate(self, code):
         """
-
+        Evaluate the value of an expression on the target machine.
         @param code:
         @return:
         """
@@ -51,6 +68,7 @@ class RemotePlugin(plugin.Plugin):
         return self.vm._pyro_daemon.evaluate("[p[1] for p in pkgutil.iter_modules()]")
 
 
+# TODO(Avital): Document
 class _RemoteModule(object):
     """
     """
@@ -65,15 +83,17 @@ class _RemoteModule(object):
         if not self._imported:
             self._vm._pyro_daemon.execute("import %s" % self._name)
             self._imported = True
-        if self._vm._pyro_daemon.evaluate(
-                        "inspect.ismodule(%s.%s)" % (self._name, item)):
+
+        if self._vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self._vm)
-        elif self._vm._pyro_daemon.evaluate(
-                        "callable(%s.%s)" % (self._name, item)):
+
+        elif self._vm._pyro_daemon.evaluate("callable(%s.%s)" % (self._name, item)):
             return _RemoteFunction(".".join([self._name, item]), self._vm)
+
         return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
+# TODO(Avital): Document
 class _RemoteSubModule(object):
     """
     """
@@ -82,15 +102,16 @@ class _RemoteSubModule(object):
         self._vm = vm
 
     def __getattr__(self, item):
-        if self._vm._pyro_daemon.evaluate(
-                        "inspect.ismodule(%s.%s)" % (self._name, item)):
+        if self._vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self._vm)
-        elif self._vm._pyro_daemon.evaluate(
-                        "inspect.isfunction(%s.%s)" % (self._name, item)):
+
+        elif self._vm._pyro_daemon.evaluate("inspect.isfunction(%s.%s)" % (self._name, item)):
             return _RemoteFunction(".".join([self._name, item]), self._vm)
+
         return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
+# TODO(Avital): Document
 class _RemoteFunction(object):
     """
     """
@@ -104,9 +125,12 @@ class _RemoteFunction(object):
         # Need to handle args too
 
 
+# TODO(Cory): Document
+# TODO(Cory): Finish implementation
 class _RemoteFile(object):
     """
-
+    Represents a file object on a remote machine. Acts exactly like Python's regular
+    file objects.
     """
     def __init__(self, path, mode, _pyro_daemon):
         self.__daemon = _pyro_daemon
@@ -116,53 +140,54 @@ class _RemoteFile(object):
 
     def __enter__(self):
         """
-
-        @return:
+        Enable the remote file act as a context manager.
+        @return: I{vmpie.remote._RemoteFile}
         """
         return self
 
     def __exit__(self, *args):
         """
-
-        @return:
+        Enable the remote file act as a context manager.
         """
         self.close()
 
     def close(self):
         """
-
-        @return:
+        Close the remote file.
         """
         self.__daemon.execute("{name}.close()".format(name=self._name))
 
     @property
     def closed(self):
         """
-
-        @return:
+        Return whether the file is closed or not.
+        @return: True if closed, Flase otherwise
+        @rtype: I{bool}
         """
         return self.__daemon.evaluate("{name}.closed".format(name=self._name))
 
     @property
     def encoding(self):
         """
-
-        @return:
+        Return the encoding of the file.
+        @return: Encoding of the remote file
+        @rtype:
         """
         return self.__daemon.evaluate("{name}.encoding".format(name=self._name))
 
     def fileno(self):
         """
-
-        @return:
+        Return the file descriptor for the file on the remote machine.
+        @return: Remote file file-descriptor
+        @rtype: I{int}
         """
         return self.__daemon.evaluate("{name}.fileno()".format(name=self._name))
 
     def write(self, data):
         """
-
-        @param data:
-        @return:
+        Write data to the remote file.
+        @param data: The data to write
+        @type data: I{str}
         """
         return self.__daemon.execute("{name}.write('{data}')".format(name=self._name, data=data))
 
@@ -192,10 +217,22 @@ class _RemoteFile(object):
         return self.__daemon.evaluate("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
 
     def flush(self):
-        pass
+        """
+        """
+        return self.__daemon.execute("{name}.flush()".format(name=self._name))
 
     def seek(self):
         pass
 
     def tell(self):
         pass
+
+    def __str__(self):
+        """
+        """
+        raise NotImplementedError
+
+    def __repr__(self):
+        """
+        """
+        raise NotImplementedError

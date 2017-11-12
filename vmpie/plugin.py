@@ -37,10 +37,10 @@ class Plugin(object):
         self.vm = vm
 
     def __str__(self):
-        return "<Plugin {name} for {os}>".format(name=self._name, os=str(self._os))
+        return "<Plugin {name} on vm {vm}>".format(name=self._name, vm=self.vm.name)
 
     def __repr__(self):
-        return "<Plugin {name} for {os}>".format(name=self._name, os=str(self._os))
+        return "<Plugin {name} on vm {vm}>".format(name=self._name, vm=self.vm.name)
 
 
 class PluginManager(object):
@@ -102,6 +102,7 @@ class PluginManager(object):
         @return: The loaded module.
         @rtype: I{module}
         """
+        # TODO: Replace with imp.load_source
         mod = __import__(file_name[:-3], globals(), locals(), [], 0)
         return mod
         # return imp.load_source("plugins." + base_name, file_path)
