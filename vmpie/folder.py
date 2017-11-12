@@ -45,6 +45,7 @@ class Folder(object):
 
     @property
     def vms(self):
+        self._vms = []
         for vm in self._pyVmomiFolder.childEntity:
             if isinstance(vm, vim.VirtualMachine):
                 self._vms.append(virtual_machine.VirtualMachine(vm.name))
