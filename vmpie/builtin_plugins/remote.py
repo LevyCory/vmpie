@@ -131,6 +131,7 @@ class _RemoteMethod(object):
 
     def __call__(self, *args, **kwargs):
         return self.vm._pyro_daemon.invokeModule(self._name, args, kwargs)
+        # CR - Remove unneeded commens
         # return self.vm._pyro_daemon.evaluate("%s()", %self.name)
         # Need to handle args too
 
