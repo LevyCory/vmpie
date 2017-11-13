@@ -219,8 +219,6 @@ class _RemoteFunction(object):
                                                      kwargs=kwargs))
 
 
-# TODO(Cory): Document
-# TODO(Cory): Finish implementation
 class _RemoteFile(object):
     """
     Represents a file object on a remote machine. Acts exactly like Python's regular
