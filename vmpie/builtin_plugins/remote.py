@@ -14,6 +14,11 @@ import vmpie.consts as consts
 import vmpie.plugin as plugin
 
 
+# ==================================================== CONSTANTS ===================================================== #
+
+FILE_CLOSED_STATE = "Closed"
+FILE_OPEN_STATE = "Open"
+
 # ===================================================== CLASSES ====================================================== #
 
 
@@ -26,7 +31,8 @@ class RemotePlugin(plugin.Plugin):
 
     def __init__(self, vm):
         """
-        Creates a remote plugin object and injects all the python importable modules on the target machine to the object.
+        Creates a remote plugin object and injects all the python importable modules on
+        the target machine to the object.
         @param vm: The target machine
         @type vm: vmpie.virtual_machine.VirtualMachine
         """
@@ -103,7 +109,8 @@ class _RemoteModule(object):
 
     def __getattr__(self, item):
         """
-        Detects the type of the desired attribute (sub-module, method or attribute) and returns the corresponding object.
+        Detects the type of the desired attribute (sub-module, method or attribute) and returns
+        the corresponding object.
         @param item: The desired attribute
         @type item: str
         @return: The matching remote object or the value of the attribute.
@@ -143,7 +150,8 @@ class _RemoteSubModule(object):
 
     def __getattr__(self, item):
         """
-        Detects the type of the desired attribute (sub-module, method or attribute) and returns the corresponding object.
+        Detects the type of the desired attribute (sub-module, method or attribute) and returns
+        the corresponding object.
         @param item: The desired attribute
         @type item: str
         @return: The matching remote object or the value of the attribute.
@@ -221,6 +229,8 @@ class _RemoteFile(object):
     def __init__(self, path, mode, _pyro_daemon):
         self.__daemon = _pyro_daemon
         self._name = "file_{id}".format(id=uuid.uuid4().get_hex())
+
+        self.name = path
 
         self.__daemon.execute("{name} = open('{path}', '{mode}')".format(name=self._name, path=path, mode=mode))
 
@@ -314,11 +324,11 @@ class _RemoteFile(object):
         pass
 
     def __str__(self):
-        """
-        """
-        raise NotImplementedError
+        # Determine the file's state
+        state = FILE_CLOSED_STATE if self.closed else FILE_OPEN_STATE
+        return "{state} _RemoteFile at {path}".format(state=state, path=self.name)
 
     def __repr__(self):
-        """
-        """
-        raise NotImplementedError
+        # Determine the file's state
+        state = FILE_CLOSED_STATE if self.closed else FILE_OPEN_STATE
+        return "{state} _RemoteFile at {path}".format(state=state, path=self.name)
