@@ -17,7 +17,6 @@ import vmpie.plugin as plugin
 # ===================================================== CLASSES ====================================================== #
 
 
-# TODO(Avital): Document
 class RemotePlugin(plugin.Plugin):
     """
     Provide RPC operations to virtual machines.
@@ -27,6 +26,9 @@ class RemotePlugin(plugin.Plugin):
 
     def __init__(self, vm):
         """
+        Creates a remote plugin object and injects all the python importable modules on the target machine to the object.
+        @param vm: The target machine
+        @type vm: vmpie.virtual_machine.VirtualMachine
         """
         # TODO: Check why super fails
         # super(RemotePlugin, self).__init__(vm)
@@ -36,11 +38,15 @@ class RemotePlugin(plugin.Plugin):
         self.vm._pyro_daemon = self.connect()
         self.vm._pyro_daemon.execute("import inspect")
 
+        # Get all the python importable modules on the target machine and inject them to as attributes.
         for module_name in self._get_modules():
             setattr(self, module_name, _RemoteModule(module_name, self.vm))
 
     def connect(self):
         """
+        Connects to the Pyro server on the target machine.
+        @return: Pyro4 proxy to the Pyro server on the target machine.
+        @rtype: Pyro4.Proxy
         """
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
         # TODO: Don't hardcode the URI
@@ -49,16 +55,17 @@ class RemotePlugin(plugin.Plugin):
     def execute(self, code):
         """
         Execute code in the target machine.
-        @param code:
-        @return:
+        @param code: The code to execute in the target machine.
+        @type code: str
         """
-        return self.vm._pyro_daemon.execute(code)
+        self.vm._pyro_daemon.execute(code)
 
     def evaluate(self, code):
         """
         Evaluate the value of an expression on the target machine.
-        @param code:
-        @return:
+        @param code: The code to evaluate in the target machine.
+        @type code: str
+        @return: The returned value of the expression
         """
         return self.vm._pyro_daemon.evaluate(code)
 
@@ -78,62 +85,103 @@ class RemotePlugin(plugin.Plugin):
         return _RemoteFunction(func, self.vm)
 
 
-# TODO(Avital): Document
 class _RemoteModule(object):
     """
+    Represents a remote module on the target machine.
     """
     def __init__(self, module_name, vm):
+        """
+        Creates a remote module object.
+        @param module_name: The name of the remote module on the target machine.
+        @type module_name: str
+        @param vm: The target machine
+        @type vm: vmpie.virtual_machine.VirtualMachine
+        """
         self._name = module_name
         self.vm = vm
         self._imported = False
 
     def __getattr__(self, item):
         """
+        Detects the type of the desired attribute (sub-module, method or attribute) and returns the corresponding object.
+        @param item: The desired attribute
+        @type item: str
+        @return: The matching remote object or the value of the attribute.
+        @rtype: RemoteSubModule / RemoteMethod / object (value of the attribute)
         """
+        # Import the module of it hasn't been loaded yet (caching)
         if not self._imported:
             self.vm._pyro_daemon.execute("import %s" % self._name)
             self._imported = True
 
+        # Check if item is a sub-module
         if self.vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self.vm)
 
+        # Check if item is a method
         elif self.vm._pyro_daemon.evaluate("callable(%s.%s)" % (self._name, item)):
             return _RemoteMethod(".".join([self._name, item]), self.vm)
 
+        # Item is a regular attribute - return its value
         return self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
-# TODO(Avital): Document
 class _RemoteSubModule(object):
     """
+    Represents a remote sub-module on the target machine.
     """
     def __init__(self, module_name, vm):
+        """
+        Creates a remote sub-module object (ie: os.path).
+        @param module_name: The name of the remote sub-module on the target machine.
+        @type module_name: str
+        @param vm: The target machine
+        @type vm: vmpie.virtual_machine.VirtualMachine
+        """
         self._name = module_name
         self.vm = vm
 
     def __getattr__(self, item):
+        """
+        Detects the type of the desired attribute (sub-module, method or attribute) and returns the corresponding object.
+        @param item: The desired attribute
+        @type item: str
+        @return: The matching remote object or the value of the attribute.
+        @rtype: RemoteSubModule / RemoteMethod / object (value of the attribute)
+        """
+        # Check if item is a sub-module
         if self.vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
             return _RemoteSubModule(".".join([self._name, item]), self.vm)
 
+        # Check if item is a method
         elif self.vm._pyro_daemon.evaluate("inspect.isfunction(%s.%s)" % (self._name, item)):
             return _RemoteMethod(".".join([self._name, item]), self.vm)
 
+        # Item is a regular attribute - return its value
         return self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
-# TODO(Avital): Document
 class _RemoteMethod(object):
     """
+    Represents a remote method on the target machine.
     """
     def __init__(self, function_name, vm):
+        """
+        Create a remote callable method
+        @param function_name: The name of the method.
+        @type function_name: str
+        @param vm: The target machine
+        @type vm: vmpie.virtual_machine.VirtualMachine
+        """
         self._name = function_name
         self.vm = vm
 
     def __call__(self, *args, **kwargs):
+        """
+        Executes and evaluates the remote method.
+        @return: The result of the method.
+        """
         return self.vm._pyro_daemon.invokeModule(self._name, args, kwargs)
-        # CR - Remove unneeded commens
-        # return self.vm._pyro_daemon.evaluate("%s()", %self.name)
-        # Need to handle args too
 
 
 class _RemoteFunction(object):
