@@ -289,39 +289,64 @@ class _RemoteFile(object):
 
     def writelines(self, sequence):
         """
-
-        @param sequence:
+        Write the strings to the file.
+        @param sequence: The strings to write.
+        @type sequence: I{sequence}
         @return:
         """
         return self.__daemon.execute("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
 
-    def read(self, size=None):
+    def read(self, size=-1):
         """
-
-        @return:
+        Read I{size} bytes from the file. If I{size} is omitted, read until EOF.
+        @return: The read data.
+        @rtype: I{str}
         """
-        if size is None:
-            size = ""
-
         return self.__daemon.evaluate("{name}.read({size})".format(name=self._name, size=size))
 
-    def readlines(self, sequence):
+    def readline(self, size=-1):
         """
+        Read a line from the file. If I{size} is given, read up to I{size} bytes.
+        @param size: Bytes to read. Defaults to -1, e.g. read 1 line.
+        @type size: I{int}
+        @return: The read data.
+        @rtype: I{str}
+        """
+        return self.__daemon.evaluate("{name}.readline({size})").format(name=self._name, size=size)
 
-        @return:
+    def readlines(self, size):
         """
-        return self.__daemon.evaluate("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
+        Read the file as lines. If I{size} is given, read up to I{size} bytes.
+        @param size: Bytes to read. Defaults to -1, e.g. read 1 line.
+        @type size: I{int}
+        @return: The read data.
+        @rtype: I{str}
+        """
+        return self.__daemon.evaluate("{name}.readlines({size})").format(name=self._name, size=size)
 
     def flush(self):
         """
+        Flush the machine's I/O buffer.
         """
         return self.__daemon.execute("{name}.flush()".format(name=self._name))
 
-    def seek(self):
-        pass
+    def seek(self, offset, whence=0):
+        """
+        Move the file cursor I{offset} bytes forward.
+        @param offset: Number of bytes to move the cursor by.
+        @type offset: I{int}
+        @param whence: Where to start the seek from. Defaults to the start of the file.
+        @type whence: I{int}
+        """
+        self.__daemon.execute("{name}.seek({offset}, {whence})").format(name=self._name, offset=offset, whence=whence)
 
     def tell(self):
-        pass
+        """
+        Return the current position of the file cursor.
+        @return: Current position of the file cursor.
+        @rtype: I{int}
+        """
+        return self.__daemon.execute("{name}.tell()".format(name=self._name))
 
     def __str__(self):
         # Determine the file's state
