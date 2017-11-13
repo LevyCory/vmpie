@@ -7,11 +7,12 @@
 # ===================================================== IMPORTS ====================================================== #
 
 import uuid
-
+import inspect
 import Pyro4
 
 import vmpie.consts as consts
 import vmpie.plugin as plugin
+
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -67,6 +68,15 @@ class RemotePlugin(plugin.Plugin):
         self.vm._pyro_daemon.execute("import pkgutil")
         return self.vm._pyro_daemon.evaluate("[p[1] for p in pkgutil.iter_modules()]")
 
+    def teleport(self, func):
+        """
+        Teleport a locally defined function to the target machine.
+        @param func: The function to teleport to the target machine.
+        @return: A matching remote callable function.
+        @rtype: RemoteFunction
+        """
+        return _RemoteFunction(func, self.vm)
+
 
 # TODO(Avital): Document
 class _RemoteModule(object):
@@ -74,23 +84,23 @@ class _RemoteModule(object):
     """
     def __init__(self, module_name, vm):
         self._name = module_name
-        self._vm = vm
+        self.vm = vm
         self._imported = False
 
     def __getattr__(self, item):
         """
         """
         if not self._imported:
-            self._vm._pyro_daemon.execute("import %s" % self._name)
+            self.vm._pyro_daemon.execute("import %s" % self._name)
             self._imported = True
 
-        if self._vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
-            return _RemoteSubModule(".".join([self._name, item]), self._vm)
+        if self.vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
+            return _RemoteSubModule(".".join([self._name, item]), self.vm)
 
-        elif self._vm._pyro_daemon.evaluate("callable(%s.%s)" % (self._name, item)):
-            return _RemoteFunction(".".join([self._name, item]), self._vm)
+        elif self.vm._pyro_daemon.evaluate("callable(%s.%s)" % (self._name, item)):
+            return _RemoteMethod(".".join([self._name, item]), self.vm)
 
-        return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
+        return self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
 # TODO(Avital): Document
@@ -99,30 +109,57 @@ class _RemoteSubModule(object):
     """
     def __init__(self, module_name, vm):
         self._name = module_name
-        self._vm = vm
+        self.vm = vm
 
     def __getattr__(self, item):
-        if self._vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
-            return _RemoteSubModule(".".join([self._name, item]), self._vm)
+        if self.vm._pyro_daemon.evaluate("inspect.ismodule(%s.%s)" % (self._name, item)):
+            return _RemoteSubModule(".".join([self._name, item]), self.vm)
 
-        elif self._vm._pyro_daemon.evaluate("inspect.isfunction(%s.%s)" % (self._name, item)):
-            return _RemoteFunction(".".join([self._name, item]), self._vm)
+        elif self.vm._pyro_daemon.evaluate("inspect.isfunction(%s.%s)" % (self._name, item)):
+            return _RemoteMethod(".".join([self._name, item]), self.vm)
 
-        return self._vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
+        return self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item))
 
 
 # TODO(Avital): Document
-class _RemoteFunction(object):
+class _RemoteMethod(object):
     """
     """
     def __init__(self, function_name, vm):
         self._name = function_name
-        self._vm = vm
+        self.vm = vm
 
     def __call__(self, *args, **kwargs):
-        return self._vm._pyro_daemon.invokeModule(self._name, args, kwargs)
-        # return self._vm._pyro_daemon.evaluate("%s()", %self.name)
+        return self.vm._pyro_daemon.invokeModule(self._name, args, kwargs)
+        # return self.vm._pyro_daemon.evaluate("%s()", %self.name)
         # Need to handle args too
+
+
+class _RemoteFunction(object):
+    """
+    Represents a remote instance of a given function
+    """
+    def __init__(self, func, vm):
+        """
+        Given a local function, create a remote instance of the function in the target machine.
+        @param func: The local function
+        @type func: function
+        @param vm: The target machine.
+        @type vm: vmpie.virtual_machine.VirtualMachine
+        """
+        self.vm = vm
+        self._function_name = func.__name__
+        self.vm._pyro_daemon.execute(inspect.getsource(func))
+
+    def __call__(self, *args, **kwargs):
+        """
+        Executes and evaluates the remote function.
+        @return: The result of the function.
+        """
+        return self.vm._pyro_daemon.evaluate("{function_name}(*{args}, **{kwargs})"
+                                             .format(function_name=self._function_name,
+                                                     args=args,
+                                                     kwargs=kwargs))
 
 
 # TODO(Cory): Document
