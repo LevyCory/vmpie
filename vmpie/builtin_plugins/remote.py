@@ -227,15 +227,13 @@ class _RemoteFile(object):
     def __init__(self, path, mode, _pyro_daemon):
         self.__daemon = _pyro_daemon
         self._name = "file_{id}".format(id=uuid.uuid4().get_hex())
-
         self.name = path
-
         self.__daemon.execute("{name} = open('{path}', '{mode}')".format(name=self._name, path=path, mode=mode))
 
     def __enter__(self):
         """
         Enable the remote file act as a context manager.
-        @return: I{vmpie.remote._RemoteFile}
+        @return: I{vmpie.builtin_plugins.remote._RemoteFile}
         """
         return self
 
@@ -255,7 +253,7 @@ class _RemoteFile(object):
     def closed(self):
         """
         Return whether the file is closed or not.
-        @return: True if closed, Flase otherwise
+        @return: True if closed, False otherwise
         @rtype: I{bool}
         """
         return self.__daemon.evaluate("{name}.closed".format(name=self._name))
