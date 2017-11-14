@@ -36,11 +36,8 @@ class RemotePlugin(plugin.Plugin):
         @param vm: The target machine
         @type vm: vmpie.virtual_machine.VirtualMachine
         """
-        # TODO: Check why super fails
-        # super(RemotePlugin, self).__init__(vm)
+        super(RemotePlugin, self).__init__(vm)
 
-        # TODO: Remove when super works
-        self.vm = vm
         self.vm._pyro_daemon = self.connect()
         self.vm._pyro_daemon.execute("import inspect")
 
