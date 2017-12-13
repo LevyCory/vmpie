@@ -70,7 +70,7 @@ class ProcessPlugin(plugin.Plugin):
             mgmt = win32com.client.GetObject('winmgmts:')
 
             # Get all processes with the given name
-            process_list = mgmt.ExecQuery("SELECT * from Win32_Process where Caption = {ps}".format(ps=ps))
+            process_list = mgmt.ExecQuery("SELECT * from Win32_Process where Caption = '{ps}'".format(ps=ps))
             if process_list:
                 # Get the process PID (if there are many, select the first one)
                 pid = process_list[0].Properties_('ProcessId').Value
@@ -153,15 +153,15 @@ class ProcessPlugin(plugin.Plugin):
             ps = 'explorer.exe'
 
         # Create remote Popen
-        remote_popen = _RemotePopen(
+        remote_popen = self.vm.remote.subprocess.Popen(
             command=command,
             user_token=self.__get_user_token(ps=ps),
             sdtout=self.vm.remote.subprocess.PIPE,
             stderr=self.vm.remote.subprocess.STDOUT,
             shell=False,
-            startup_info=self._create_startup_info(None, daemon),
+            #startup_info=self._create_startup_info(None, daemon),
             cwd=None,
-            env=self.vm.env.get_user_environment_block(ps)
+            #env=self.vm.env.get_user_environment_block(ps)
         )
 
         if async:

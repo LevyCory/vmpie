@@ -10,6 +10,7 @@ import sys
 import uuid
 import types
 import inspect
+import pickle
 import Pyro4
 import vmpie.consts as consts
 import vmpie.plugin as plugin
@@ -105,6 +106,7 @@ class RemotePlugin(plugin.Plugin):
 
         self.vm._pyro_daemon = self.connect()
         self.vm._pyro_daemon.execute("import inspect")
+        self.vm._pyro_daemon.execute("import pickle")
 
         # Get all the python importable modules on the target machine and inject them to as attributes.
         for module_name in self._get_modules():
@@ -254,7 +256,7 @@ class _RemoteMethod(object):
     def __call__(self, *args, **kwargs):
         try:
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
-
+            # TODO: "Unboxing" - Check for each argument if it is a reference, and expand it to be the correct object
             self.vm._pyro_daemon.execute("{remote_obj_name} = {method_name}(*{args}, **{kwargs})".format(
                 remote_obj_name=remote_obj_name,
                 method_name=self._name,
@@ -298,7 +300,8 @@ class _RemoteFunction(object):
 
             return self.vm._pyro_daemon.evaluate("{remote_obj_name}".format(remote_obj_name=remote_obj_name))
 
-        except Exception:
+        except Exception as e:
+            print e
             return handle_unserializable_types(self.vm, remote_obj_name)
 
 
@@ -360,6 +363,11 @@ class _RemoteObject(object):
         return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__repr__()".format(
             remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
             oid=self._RemoteObject__oid))
+
+    def __reduce_ex_(self, proto):
+        return pickle.loads, (self.vm._pyro_daemon.evaluate("pickle.dumps({remote_object_cache_name}[{oid}])".format(
+            remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+            oid=self._RemoteObject__oid)), )
 
     @classmethod
     def _create_class_proxy(cls, oid, vm, class_name, module_name):
