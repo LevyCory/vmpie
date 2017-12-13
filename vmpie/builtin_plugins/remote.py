@@ -11,7 +11,7 @@ import uuid
 import types
 import inspect
 import Pyro4
-
+from cPickle import UnpickleableError
 import vmpie.consts as consts
 import vmpie.plugin as plugin
 
@@ -20,13 +20,21 @@ import vmpie.plugin as plugin
 
 FILE_CLOSED_STATE = "Closed"
 FILE_OPEN_STATE = "Open"
-REMOTE_OBJECT_CACHE_NAME = "_remote_object_cache_{uuid}".format(uuid=uuid.uuid4())
+REMOTE_OBJECT_CACHE_NAME = "_remote_object_cache_{uuid}".format(uuid=uuid.uuid4().get_hex())
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
     frozenset, Exception, type(None), types.BuiltinFunctionType, types.GeneratorType,
     types.ModuleType, types.FunctionType, basestring, unicode, long, xrange, type(iter(xrange(10))), file,
     types.InstanceType, types.ClassType, types.DictProxyType
 ]
+
+_LOCAL_OBJECT_ATTRS = frozenset([
+    '_RemoteObject__oid', 'vm', '__class__', '__cmp__', '__del__', '__delattr__',
+    '__dir__', '__doc__', '__getattr__', '__getattribute_', '__hash__',
+    '__init__', '__metaclass__', '__module__', '__new__', '__reduce__',
+    '__reduce_ex__', '__repr__', '__setattr__', '__slots__', '__str__',
+    '__weakref__', '__dic__', '__members__', '__methods__',
+])
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -67,7 +75,7 @@ class RemotePlugin(plugin.Plugin):
         """
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
         # TODO: Don't hardcode the URI
-        return Pyro4.Proxy("PYRO:Pyro.Flame@192.168.70.71:2808")
+        return Pyro4.Proxy("PYRO:Pyro.Flame@192.168.70.72:2808")
 
     def execute(self, code):
         """
@@ -101,6 +109,19 @@ class RemotePlugin(plugin.Plugin):
         """
         return _RemoteFunction(func, self.vm)
 
+
+def inspect_methods(remote_object_cache_name, exculded_methods, oid):
+    import inspect
+    local_object = eval("{remote_object_cache_name}[{oid}]".format(
+        remote_object_cache_name=remote_object_cache_name,
+        oid=oid))
+    methods = []
+
+    for attr in dir(local_object):
+        method = getattr(local_object, attr)
+        if attr not in exculded_methods and inspect.ismethod(method):
+            methods.append((attr, method.__doc__))
+    return methods
 
 class _RemoteModule(object):
     """
@@ -194,37 +215,41 @@ class _RemoteMethod(object):
         """
         self._name = function_name
         self.vm = vm
+        self.__doc__ = vm._pyro_daemon.evaluate("inspect.getdoc({method_name})".format(
+            method_name=self._name,
+        ))
 
     def __call__(self, *args, **kwargs):
         try:
-            return self.vm._pyro_daemon.invokeModule(self._name, args, kwargs)
-        except:
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
-            self.vm.pyro_daemon.execute("{object_name} = {name}(*{args}, **{kwargs})".format(
-                object_name=remote_obj_name,
-                name=self._name,
-                args=args,
-                kwargs=kwargs)
-            )
 
-            oid = self.vm._pyro_daemon.evaluate("id({object_name})]".format(
-                object_name=remote_obj_name
+            self.vm._pyro_daemon.execute("{remote_obj_name} = {method_name}(*{args}, **{kwargs})".format(
+                remote_obj_name=remote_obj_name,
+                method_name=self._name,
+                args=args,
+                kwargs=kwargs))
+
+            return self.vm._pyro_daemon.evaluate("{remote_obj_name}".format(remote_obj_name=remote_obj_name))
+
+        except Exception:
+            oid = self.vm._pyro_daemon.evaluate("id({remote_obj_name})".format(
+                remote_obj_name=remote_obj_name
             ))
 
-            self.vm._pyro_daemon.execute("{remote_object_cache_name}[{oid}]={object_name})".format(
+            self.vm._pyro_daemon.execute("{remote_object_cache_name}[{oid}]={remote_obj_name}".format(
                 remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
                 oid=oid,
-                object_name=remote_obj_name)
+                remote_obj_name=remote_obj_name)
             )
 
-            return _RemoteObject(oid, self.vm)
+            return _RemoteObject(oid=oid, vm=self.vm)
+
+
 
 class _RemoteObject(object):
-        """
-        Executes and evaluates the remote method.
-        @return: The result of the method.
-        """
     """
+    Executes and evaluates the remote method.
+    @return: The result of the method.
     """
     __slots__ = ["vm", "__weakref__", "__oid"]
 
@@ -236,23 +261,46 @@ class _RemoteObject(object):
 
     # proxying (special cases)
     def __getattribute__(self, name):
-        return getattr(object.__getattribute__(self, "_obj"), name)
+        return object.__getattribute__(self, name)
+
+
+    def __getattr__(self, name):
+        return self.vm._pyro_daemon.evaluate("getattr({remote_object_cache_name}[{oid}], '{name}')"
+                                             .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                     oid=self._RemoteObject__oid,
+                                                     name=name))
 
     def __delattr__(self, name):
-        delattr(object.__getattribute__(self, "_obj"), name)
+        if name in _LOCAL_OBJECT_ATTRS:
+            object.__delattr__(self, name)
+        else:
+            return self.vm._pyro_daemon.evaluate("delattr{remote_object_cache_name}[{oid}], '{name}')"
+                                                 .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                         oid=self._RemoteObject__oid,
+                                                         name=name))
 
     def __setattr__(self, name, value):
-        setattr(object.__getattribute__(self, "_obj"), name, value)
-
-    def __nonzero__(self):
-        return bool(object.__getattribute__(self, "_obj"))
-
+        if name in _LOCAL_OBJECT_ATTRS:
+            object.__setattr__(self, name, value)
+        else:
+            return self.vm._pyro_daemon.evaluate("setattr({remote_object_cache_name}[{oid}], '{name}', {value})"
+                                                 .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                         oid=self._RemoteObject__oid,
+                                                         name=name,
+                                                         value=value))
+    def __dir__(self):
+        return self.vm._pyro_daemon.evaluate("dir({remote_object_cache_name}[{oid}])"
+                                             .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                     oid=self._RemoteObject__oid))
     def __str__(self):
-        return str(object.__getattribute__(self, "_obj"))
+        return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__str__()"
+                                             .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                     oid=self._RemoteObject__oid))
 
     def __repr__(self):
-        return repr(object.__getattribute__(self, "_obj"))
-
+        return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__repr__()"
+                                                     .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                             oid=self._RemoteObject__oid))
 
     @classmethod
     def _create_class_proxy(cls, oid, vm, class_name, module_name):
@@ -260,28 +308,51 @@ class _RemoteObject(object):
         creates a proxy for the given class
         """
         def make_method(name):
-            def method(self, *args, **kwargs):
-                return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].{name}(*{args}, **{kwargs})"
+            if name == "__call__":
+                def __call__(self, *args, **kwargs):
+                    kwargs = tuple(kwargs.items())
+                    return vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}]__call__(*{args}, **{kwargs})"
                                                      .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
-                                                             oid=self.__oid,
-                                                             name=name,
+                                                             oid=oid,
                                                              args=args,
                                                              kwargs=kwargs))
-        def inspect_methods(remote_object_cache_name, oid):
-            import inspect
-            local_object = eval("{remote_object_cache_name}[{oid}]".format(
-                remote_object_cache_name=remote_object_cache_name,
-                oid=oid))
-            methods = []
-            for attr in dir(local_object):
-                method = getattr(local_object, attr)
-                if inspect.ismethod(method):
-                    methods.append((attr, method.__doc__))
-            return methods
+                return __call__
 
-        methods = vm.remote.teleport(inspect_methods)(REMOTE_OBJECT_CACHE_NAME, oid)
+            def method(self, *args, **kwargs):
+                # Check if item is a sub-module
+                if self.vm._pyro_daemon.evaluate(
+                        "inspect.ismodule(getattr({remote_object_cache_name}[{oid}], '{name}'))".format(
+                                remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                oid=self._RemoteObject__oid,
+                                name=name)):
+                    return _RemoteSubModule("{remote_object_cache_name}[{oid}].{name}".format(
+                        remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                        oid=self._RemoteObject__oid,
+                        name=name),
+                        self.vm)
 
-        namespace = {}
+                # Check if item is a method
+                elif self.vm._pyro_daemon.evaluate(
+                        "callable(getattr({remote_object_cache_name}[{oid}], '{name}'))".format(
+                                remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                oid=self._RemoteObject__oid,
+                                name=name)):
+                    return _RemoteMethod("{remote_object_cache_name}[{oid}].{name}".format(
+                        remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                        oid=self._RemoteObject__oid,
+                        name=name),
+                        self.vm)(*args, **kwargs)
+
+                return self.vm._pyro_daemon.evaluate("getattr({remote_object_cache_name}[{oid}], '{name}')"
+                                                     .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                                                             oid=self._RemoteObject__oid,
+                                                             name=name))(*args, **dict(kwargs))
+
+            return method
+
+        methods = vm.remote.teleport(inspect_methods)(REMOTE_OBJECT_CACHE_NAME, _LOCAL_OBJECT_ATTRS, oid)
+
+        namespace = {'__slots__': ()}
         for name, doc in methods:
             namespace[name] = make_method(name)
             namespace[name].__doc__ = doc
@@ -308,15 +379,17 @@ class _RemoteObject(object):
         note: _class_proxy_cache is unique per deriving class (each deriving
         class must hold its own cache)
         """
-        obj_class_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[oid].__class__.__name__".format(
+        obj_class_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[{oid}].__class__.__name__".format(
             remote_object_cash_name=REMOTE_OBJECT_CACHE_NAME,
             oid=oid))
 
-        module_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[oid].__module__.__name__".format(
+        module_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[{oid}].__module__".format(
             remote_object_cash_name=REMOTE_OBJECT_CACHE_NAME,
             oid=oid))
 
-        return cls._create_class_proxy(oid, vm, obj_class_name, module_name)
+        theclass = cls._create_class_proxy(oid, vm, obj_class_name, module_name)
+        ins = object.__new__(theclass)
+        return ins
 
 class _RemoteFunction(object):
     """
@@ -347,7 +420,7 @@ class _RemoteFunction(object):
         except:
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
 
-            self.vm.pyro_daemon.execute("{object_name} = {name}(*{args}, **{kwargs})".format(
+            self.vm._pyro_daemon.execute("{object_name} = {name}(*{args}, **{kwargs})".format(
                 object_name=remote_obj_name,
                 name=self._function_name,
                 args=args,
