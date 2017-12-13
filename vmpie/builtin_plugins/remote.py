@@ -155,7 +155,7 @@ class RemotePlugin(plugin.Plugin):
         @return: A matching remote callable function.
         @rtype: RemoteFunction
         """
-        return _RemoteFunction(remove_indentations(func), self.vm)
+        return _RemoteFunction(func, self.vm)
 
 
 class _RemoteModule(object):
@@ -281,7 +281,7 @@ class _RemoteFunction(object):
         """
         self.vm = vm
         self._function_name = func.__name__
-        self.vm._pyro_daemon.execute(inspect.getsource(func))
+        self.vm._pyro_daemon.execute(remove_indentations(inspect.getsource(func)))
 
     def __call__(self, *args, **kwargs):
         """
