@@ -411,10 +411,13 @@ class _RemoteObject(object):
         obj_class_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[{oid}].__class__.__name__".format(
             remote_object_cash_name=REMOTE_OBJECT_CACHE_NAME,
             oid=oid))
-
-        module_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[{oid}].__module__".format(
-            remote_object_cash_name=REMOTE_OBJECT_CACHE_NAME,
-            oid=oid))
+        try:
+            module_name = vm._pyro_daemon.evaluate("{remote_object_cash_name}[{oid}].__module__".format(
+                remote_object_cash_name=REMOTE_OBJECT_CACHE_NAME,
+                oid=oid))
+        except AttributeError:
+            # __module__ doesn't exist (i.e: in PyHandle)
+            module_name=None
 
         theclass = cls._create_class_proxy(oid, vm, obj_class_name, module_name)
         ins = object.__new__(theclass)
