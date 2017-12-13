@@ -20,6 +20,7 @@ import vmpie.plugin as plugin
 
 FILE_CLOSED_STATE = "Closed"
 FILE_OPEN_STATE = "Open"
+<<<<<<< HEAD
 REMOTE_OBJECT_CACHE_NAME = "_remote_object_cache_{uuid}".format(uuid=uuid.uuid4().get_hex())
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
@@ -64,6 +65,31 @@ def handle_unserializable_types(vm, remote_obj_name):
     )
 
     return _RemoteObject(oid=oid, vm=vm)
+=======
+TAB = "    "
+
+# ==================================================== FUNCTIONS ===================================================== #
+
+
+def remove_indentations(code):
+    """
+    Lower code indentation level.
+    @param code: The code to lower its indentation level
+    @return: The same code with less indentations
+    @rtype: string
+    """
+    lines = code.splitlines()
+
+    # Figure out how indented the code is
+    indentation_level = lines[0].count(TAB) * 4
+
+    # Remove preceding indentation from every line.
+    for index, line in enumerate(lines):
+        lines[index] = line[indentation_level:]
+
+    return "\n".join(lines)
+
+>>>>>>> master
 # ===================================================== CLASSES ====================================================== #
 
 
@@ -135,7 +161,7 @@ class RemotePlugin(plugin.Plugin):
         @return: A matching remote callable function.
         @rtype: RemoteFunction
         """
-        return _RemoteFunction(func, self.vm)
+        return _RemoteFunction(remove_indentations(func), self.vm)
 
 
 class _RemoteModule(object):
