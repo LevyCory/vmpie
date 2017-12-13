@@ -28,7 +28,9 @@ class ProcessPlugin(plugin.Plugin):
 
     def __get_user_token(self, ps='explorer.exe'):
         return self.__get_logged_on_user_token(
-            tokenAccess=self.vm.remote.win32security.TOKEN_QUERY | self.vm.remote.win32security.TOKEN_DUPLICATE | self.vm.remote.win32security.TOKEN_ASSIGN_PRIMARY,
+            tokenAccess=self.vm.remote.win32security.TOKEN_QUERY | \
+                        self.vm.remote.win32security.TOKEN_DUPLICATE | \
+                        self.vm.remote.win32security.TOKEN_ASSIGN_PRIMARY,
             ps=ps
         )
 
