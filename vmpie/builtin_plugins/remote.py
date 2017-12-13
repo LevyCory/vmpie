@@ -18,6 +18,28 @@ import vmpie.plugin as plugin
 
 FILE_CLOSED_STATE = "Closed"
 FILE_OPEN_STATE = "Open"
+TAB = "    "
+
+# ==================================================== FUNCTIONS ===================================================== #
+
+
+def remove_indentations(code):
+    """
+    Lower code indentation level.
+    @param code: The code to lower its indentation level
+    @return: The same code with less indentations
+    @rtype: string
+    """
+    lines = code.splitlines()
+
+    # Figure out how indented the code is
+    indentation_level = lines[0].count(TAB) * 4
+
+    # Remove preceding indentation from every line.
+    for index, line in enumerate(lines):
+        lines[index] = line[indentation_level:]
+
+    return "\n".join(lines)
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -85,7 +107,7 @@ class RemotePlugin(plugin.Plugin):
         @return: A matching remote callable function.
         @rtype: RemoteFunction
         """
-        return _RemoteFunction(func, self.vm)
+        return _RemoteFunction(remove_indentations(func), self.vm)
 
 
 class _RemoteModule(object):
