@@ -37,6 +37,7 @@ _LOCAL_OBJECT_ATTRS = frozenset([
 ])
 # ==================================================== FUNCTIONS ===================================================== #
 
+
 def inspect_methods(remote_object_cache_name, exculded_methods, oid):
     import inspect
     local_object = eval("{remote_object_cache_name}[{oid}]".format(
@@ -49,6 +50,7 @@ def inspect_methods(remote_object_cache_name, exculded_methods, oid):
         if attr not in exculded_methods and inspect.ismethod(method):
             methods.append((attr, method.__doc__))
     return methods
+
 
 def handle_unserializable_types(vm, remote_obj_name):
     oid = vm._pyro_daemon.evaluate("id({remote_obj_name})".format(
@@ -120,7 +122,6 @@ class RemotePlugin(plugin.Plugin):
         """
         return self.vm._pyro_daemon.evaluate(code)
 
-
     def _get_modules(self):
         """
         """
@@ -135,6 +136,7 @@ class RemotePlugin(plugin.Plugin):
         @rtype: RemoteFunction
         """
         return _RemoteFunction(func, self.vm)
+
 
 class _RemoteModule(object):
     """
@@ -242,7 +244,7 @@ class _RemoteMethod(object):
             return self.vm._pyro_daemon.evaluate("{remote_obj_name}".format(remote_obj_name=remote_obj_name))
 
         except Exception:
-            handle_unserializable_types(remote_obj_name)
+            return handle_unserializable_types(self.vm, remote_obj_name)
 
 
 class _RemoteFunction(object):
@@ -268,7 +270,7 @@ class _RemoteFunction(object):
         """
         try:
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
-            return self.vm._pyro_daemon.execute("{remote_obj_name} =  {function_name}(*{args}, **{kwargs})".format(
+            self.vm._pyro_daemon.execute("{remote_obj_name} =  {function_name}(*{args}, **{kwargs})".format(
                 remote_obj_name=remote_obj_name,
                 function_name=self._function_name,
                 args=args,
@@ -277,7 +279,7 @@ class _RemoteFunction(object):
             return self.vm._pyro_daemon.evaluate("{remote_obj_name}".format(remote_obj_name=remote_obj_name))
 
         except Exception:
-            handle_unserializable_types(remote_obj_name)
+            return handle_unserializable_types(self.vm, remote_obj_name)
 
 
 class _RemoteObject(object):
@@ -293,7 +295,6 @@ class _RemoteObject(object):
 
     normalized_builtin_types = {}
 
-    # proxying (special cases)
     def __getattribute__(self, name):
         return object.__getattribute__(self, name)
 
