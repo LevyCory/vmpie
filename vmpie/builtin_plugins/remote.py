@@ -11,16 +11,15 @@ import uuid
 import types
 import inspect
 import Pyro4
-from cPickle import UnpickleableError
 import vmpie.consts as consts
 import vmpie.plugin as plugin
 
 
 # ==================================================== CONSTANTS ===================================================== #
 
+TAB = "    "
 FILE_CLOSED_STATE = "Closed"
 FILE_OPEN_STATE = "Open"
-<<<<<<< HEAD
 REMOTE_OBJECT_CACHE_NAME = "_remote_object_cache_{uuid}".format(uuid=uuid.uuid4().get_hex())
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
@@ -36,7 +35,27 @@ _LOCAL_OBJECT_ATTRS = frozenset([
     '__reduce_ex__', '__repr__', '__setattr__', '__slots__', '__str__',
     '__weakref__', '__dic__', '__members__', '__methods__',
 ])
+
 # ==================================================== FUNCTIONS ===================================================== #
+
+
+def remove_indentations(code):
+    """
+    Lower code indentation level.
+    @param code: The code to lower its indentation level
+    @return: The same code with less indentations
+    @rtype: string
+    """
+    lines = code.splitlines()
+
+    # Figure out how indented the code is
+    indentation_level = lines[0].count(TAB) * 4
+
+    # Remove preceding indentation from every line.
+    for index, line in enumerate(lines):
+        lines[index] = line[indentation_level:]
+
+    return "\n".join(lines)
 
 
 def inspect_methods(remote_object_cache_name, exculded_methods, oid):
@@ -65,31 +84,6 @@ def handle_unserializable_types(vm, remote_obj_name):
     )
 
     return _RemoteObject(oid=oid, vm=vm)
-=======
-TAB = "    "
-
-# ==================================================== FUNCTIONS ===================================================== #
-
-
-def remove_indentations(code):
-    """
-    Lower code indentation level.
-    @param code: The code to lower its indentation level
-    @return: The same code with less indentations
-    @rtype: string
-    """
-    lines = code.splitlines()
-
-    # Figure out how indented the code is
-    indentation_level = lines[0].count(TAB) * 4
-
-    # Remove preceding indentation from every line.
-    for index, line in enumerate(lines):
-        lines[index] = line[indentation_level:]
-
-    return "\n".join(lines)
-
->>>>>>> master
 # ===================================================== CLASSES ====================================================== #
 
 
@@ -351,19 +345,21 @@ class _RemoteObject(object):
                                                          oid=self._RemoteObject__oid,
                                                          name=name,
                                                          value=value))
+
     def __dir__(self):
         return self.vm._pyro_daemon.evaluate("dir({remote_object_cache_name}[{oid}])"
                                              .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
                                                      oid=self._RemoteObject__oid))
+
     def __str__(self):
         return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__str__()"
                                              .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
                                                      oid=self._RemoteObject__oid))
 
     def __repr__(self):
-        return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__repr__()"
-                                                     .format(remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
-                                                             oid=self._RemoteObject__oid))
+        return self.vm._pyro_daemon.evaluate("{remote_object_cache_name}[{oid}].__repr__()".format(
+            remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+            oid=self._RemoteObject__oid))
 
     @classmethod
     def _create_class_proxy(cls, oid, vm, class_name, module_name):
@@ -386,7 +382,6 @@ class _RemoteObject(object):
         for name, doc in methods:
             namespace[name] = make_method(name)
             namespace[name].__doc__ = doc
-
 
         normalized_builtin_types = dict(((t.__name__, t.__module__), t) for t in _BUILTIN_TYPES)
 
@@ -417,7 +412,7 @@ class _RemoteObject(object):
                 oid=oid))
         except AttributeError:
             # __module__ doesn't exist (i.e: in PyHandle)
-            module_name=None
+            module_name = None
 
         theclass = cls._create_class_proxy(oid, vm, obj_class_name, module_name)
         ins = object.__new__(theclass)
