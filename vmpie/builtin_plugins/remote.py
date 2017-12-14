@@ -258,14 +258,23 @@ class _RemoteMethod(object):
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
 
             # TODO: Make unboxing less ugly...
+            # Unboxing and boxing idea- Maybe we can create 2 pyro deamons,
+            # the first one is the flame for accessing python modules
+            # and the second one for complex objects. When simple flame fails,
+            # we will box the complex values and send it to the server
+            # and unbox it there, perform the actions and do the same
+            # to send the info back
+            # We will have "cache" in both sides for boxing and unboxing
+            # Note: we need to check how InvokeModule works to imitate the flame
+            # behaviour when the complex objects are used via simple module calls
+            # i.e: vm.process.run command, because those command will run in the second server
+            # but not import to the modules will happen so ImportError probably be raised
             complex_kwargs = ""
             kwargs_to_remove = []
 
             # Check kwargs for complex objects and unbox them
             for arg_name in kwargs:
                 if hasattr(kwargs[arg_name], '_RemoteObject__oid'):
-                    import pdb;
-                    pdb.set_trace()
                     kwargs_to_remove.append(arg_name)
                     complex_kwargs += "'{arg_name}': {remote_object_cache_name}[{oid}], ".format(
                         arg_name=arg_name,
