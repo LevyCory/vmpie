@@ -47,7 +47,6 @@ class ProcessPlugin(plugin.Plugin):
         proc = self.get_process_by_name(ps)
         if proc:
             return self.vm.remote.win32security.OpenProcessToken(proc.handle, tokenAccess)
-
         raise KeyError("{ps} was not found among running processes.".format(ps=ps))
 
     def get_process_by_name(self, ps):
@@ -152,11 +151,12 @@ class ProcessPlugin(plugin.Plugin):
         else:
             ps = 'explorer.exe'
 
+        usertoken = self.__get_user_token(ps=ps)
         # Create remote Popen
         remote_popen = self.vm.remote.subprocess.Popen(
-            command=command,
-            user_token=self.__get_user_token(ps=ps),
-            sdtout=self.vm.remote.subprocess.PIPE,
+            args=command,
+            #user_token=usertoken,
+            stdout=self.vm.remote.subprocess.PIPE,
             stderr=self.vm.remote.subprocess.STDOUT,
             shell=False,
             #startup_info=self._create_startup_info(None, daemon),
@@ -168,10 +168,11 @@ class ProcessPlugin(plugin.Plugin):
             return remote_popen
 
         # Wait for command completion
-        output = remote_popen.stdout.read()
+        # TODO: stdout and files are PyroStreams and cant be read
+        #output = remote_popen.stdout.read()
         return_code = remote_popen.wait()
 
-        return return_code, output
+        return return_code
 
     def kill_process(self, pid):
         """

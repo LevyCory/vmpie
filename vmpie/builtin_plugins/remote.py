@@ -256,12 +256,39 @@ class _RemoteMethod(object):
     def __call__(self, *args, **kwargs):
         try:
             remote_obj_name = "remote_object_{id}".format(id=uuid.uuid4().get_hex())
-            # TODO: "Unboxing" - Check for each argument if it is a reference, and expand it to be the correct object
-            self.vm._pyro_daemon.execute("{remote_obj_name} = {method_name}(*{args}, **{kwargs})".format(
+
+            # TODO: Make unboxing less ugly...
+            complex_kwargs = ""
+            kwargs_to_remove = []
+
+            # Check kwargs for complex objects and unbox them
+            for arg_name in kwargs:
+                if hasattr(kwargs[arg_name], '_RemoteObject__oid'):
+                    import pdb;
+                    pdb.set_trace()
+                    kwargs_to_remove.append(arg_name)
+                    complex_kwargs += "'{arg_name}': {remote_object_cache_name}[{oid}], ".format(
+                        arg_name=arg_name,
+                        remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
+                        oid=getattr(kwargs[arg_name], '_RemoteObject__oid')
+                    )
+
+            for arg in kwargs_to_remove:
+                kwargs.pop(arg)
+
+            command = "{remote_obj_name} = {method_name}(*{args}, **{kwargs})".format(
                 remote_obj_name=remote_obj_name,
                 method_name=self._name,
                 args=args,
-                kwargs=kwargs))
+                kwargs=kwargs)
+
+            kwargs_end = command.rfind('}')
+
+            if complex_kwargs:
+                command = command[:kwargs_end] + ', ' + complex_kwargs + command[kwargs_end:]
+
+            # Execute command
+            self.vm._pyro_daemon.execute(command)
 
             return self.vm._pyro_daemon.evaluate("{remote_obj_name}".format(remote_obj_name=remote_obj_name))
 
