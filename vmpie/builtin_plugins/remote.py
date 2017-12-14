@@ -269,6 +269,28 @@ class _RemoteMethod(object):
             # behaviour when the complex objects are used via simple module calls
             # i.e: vm.process.run command, because those command will run in the second server
             # but not import to the modules will happen so ImportError probably be raised
+            #
+            # Update: the invoke module:
+            # @core.expose
+            # def invokeModule(self, dottedname, args, kwargs):
+            #     # dottedname is something like "os.path.walk" so strip off the module name
+            #     modulename, dottedname = dottedname.split('.', 1)
+            #     module = sys.modules[modulename]
+            #     # Look up the actual method to call.
+            #     # Because Flame already opens all doors, security wise, we allow ourselves to
+            #     # look up a dotted name via object traversal. The security implication of that
+            #     # is overshadowed by the security implications of enabling Flame in the first place.
+            #     # We also don't check for access to 'private' methods. Same reasons.
+            #     method = module
+            #     for attr in dottedname.split('.'):
+            #         method = getattr(method, attr)
+            #     return method(*args, **kwargs)
+            #
+            # So in the second server we will only need to check if the command running is a moduled one,
+            # aka module.submodule...class.method (can be checked in the client, cause it will go to RemoteMethod
+            # and not to RemoteFunction), and then create our own InvokeMethod in the second server and unbox the values
+
+            
             complex_kwargs = ""
             kwargs_to_remove = []
 
