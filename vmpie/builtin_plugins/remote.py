@@ -290,7 +290,7 @@ class _RemoteMethod(object):
             # aka module.submodule...class.method (can be checked in the client, cause it will go to RemoteMethod
             # and not to RemoteFunction), and then create our own InvokeMethod in the second server and unbox the values
 
-            
+
             complex_kwargs = ""
             kwargs_to_remove = []
 
