@@ -6,9 +6,9 @@
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
+from __future__ import print_function
 import sys
 import types
-from __future__ import print_function
 
 from Pyro4 import core
 from Pyro4 import errors
@@ -41,11 +41,12 @@ _BUILTIN_TYPES = [
 
 # ==================================================== FUNCTIONS ===================================================== #
 
+
 def is_iterable(p_object):
     """
     """
     try:
-        it = iter(p_object)
+        iter(p_object)
     except TypeError:
         return False
     return True
@@ -265,8 +266,8 @@ def main(args=None, returnWithoutLooping=False):
 
     if returnWithoutLooping:
         # for unit testing
-        return daemon, uri  
-    
+        return daemon, uri
+
     else:
         daemon.requestLoop()
     daemon.close()

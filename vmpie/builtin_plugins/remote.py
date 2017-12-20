@@ -10,7 +10,6 @@ import sys
 import uuid
 import types
 import inspect
-import pickle
 import Pyro4
 import vmpie.consts as consts
 import vmpie.plugin as plugin
@@ -145,7 +144,7 @@ def is_iterable(p_object):
     """
     """
     try:
-        it = iter(p_object)
+        iter(p_object)
     except TypeError:
         return False
     return True
@@ -183,7 +182,6 @@ class RemotePlugin(plugin.Plugin):
         # Get all the python importable modules on the target machine and inject them as attributes.
         for module_name in self._get_modules():
             setattr(self, module_name, _RemoteModule(module_name, self.vm))
-
 
     def connect(self):
         """
@@ -353,7 +351,6 @@ class _RemoteFunction(object):
         return unpack(self.vm, self.vm._pyro_daemon.call(pack(self._function_name), args, kwargs))
 
 
-
 class _RemoteObject(object):
     """
     Executes and evaluates the remote method.
@@ -395,7 +392,6 @@ class _RemoteObject(object):
         return unpack(self.vm, self.vm._pyro_daemon.str(pack(self)))
 
     def __repr__(self):
-        import pdb; pdb.set_trace()
         return unpack(self.vm, self.vm._pyro_daemon.repr(pack(self)))
 
     # def __reduce_ex_(self, proto):
