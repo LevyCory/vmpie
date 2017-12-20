@@ -5,13 +5,15 @@
 # Author        : Avital Livshits, Cory Levy
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
-from __future__ import print_function
-import types
-from Pyro4.utils.flame import Flame
-from Pyro4 import errors
+
 import sys
-from Pyro4.configuration import config
+import types
+from __future__ import print_function
+
 from Pyro4 import core
+from Pyro4 import errors
+from Pyro4.utils.flame import Flame
+from Pyro4.configuration import config
 
 # ==================================================== CONSTANTS ===================================================== #
 
@@ -37,10 +39,11 @@ _BUILTIN_TYPES = [
     types.InstanceType, types.ClassType, types.DictProxyType
 ]
 
-
 # ==================================================== FUNCTIONS ===================================================== #
 
 def is_iterable(p_object):
+    """
+    """
     try:
         it = iter(p_object)
     except TypeError:
@@ -49,10 +52,14 @@ def is_iterable(p_object):
 
 
 def is_file(p_object):
+    """
+    """
     return isinstance(p_object, file)
 
 
 def inspect_methods(obj):
+    """
+    """
     import inspect
     methods = []
     for attr in dir(obj):
@@ -90,6 +97,8 @@ def connect(location, hmac_key=None):
 
 
 # ===================================================== CLASSES ====================================================== #
+
+
 @core.expose
 class Server(Flame):
     """
@@ -97,7 +106,6 @@ class Server(Flame):
     Usually created by using :py:meth:`core.Daemon.startFlame`.
     Be *very* cautious before starting this: it allows the clients full access to everything on your system.
     """
-
     def __init__(self):
         self.local_storage = {}
         super(Server, self).__init__()
@@ -118,10 +126,12 @@ class Server(Flame):
                 raise
 
     def pack(self, obj):
-        # Pack each argument as a tuple(type[reg/ref], value[real value/(oid, class, module, ,methods))
-        # Check if picklable or if stream (ie: file, stdout, etc), and handle  accordingly.
-        # Check if maybe we can implement RemoteFunction, RemoteMethod and RemoteSubmodule here and send it
-        # instead of defining it in vmpie.
+        """
+        Pack each argument as a tuple(type[reg/ref], value[real value/(oid, class, module, ,methods))
+        Check if picklable or if stream (ie: file, stdout, etc), and handle  accordingly.
+        Check if maybe we can implement RemoteFunction, RemoteMethod and RemoteSubmodule here and send it
+        instead of defining it in vmpie.
+        """
         if is_file(obj):
             self.local_storage[id(obj)] = obj
             return FILE_LABEL, (id(obj), obj.__class__.__name__, obj.__class__.__module__, inspect_methods(obj))
@@ -137,12 +147,16 @@ class Server(Flame):
 
     @core.expose
     def execute(self, code):
-        """execute a piece of code"""
+        """
+        execute a piece of code
+        """
         return self.pack(super(Server, self).execute(code))
 
     @core.expose
     def evaluate(self, expression):
-        """evaluate an expression and return its result"""
+        """
+        evaluate an expression and return its result
+        """
         return self.pack(super(Server, self).evaluate(expression))
 
     @core.expose
@@ -237,7 +251,8 @@ def main(args=None, returnWithoutLooping=False):
     if not hmac and not options.quiet:
         print("Warning: HMAC key not set. Anyone can connect to this server!")
 
-    config.SERIALIZERS_ACCEPTED = {"pickle"}  # flame requires pickle serializer, doesn't work with the others.
+    # flame requires pickle serializer, doesn't work with the others.
+    config.SERIALIZERS_ACCEPTED = {"pickle"}
 
     daemon = core.Daemon(host=options.host, port=options.port, unixsocket=options.unixsocket)
 
@@ -249,7 +264,9 @@ def main(args=None, returnWithoutLooping=False):
         print("server is running.")
 
     if returnWithoutLooping:
-        return daemon, uri  # for unit testing
+        # for unit testing
+        return daemon, uri  
+    
     else:
         daemon.requestLoop()
     daemon.close()

@@ -15,13 +15,17 @@ import Pyro4
 import vmpie.consts as consts
 import vmpie.plugin as plugin
 
-
 # ==================================================== CONSTANTS ===================================================== #
 
 TAB = "    "
 FILE_CLOSED_STATE = "Closed"
 FILE_OPEN_STATE = "Open"
 REMOTE_OBJECT_CACHE_NAME = "_remote_object_cache_{uuid}".format(uuid=uuid.uuid4().get_hex())
+VALUE_LABEL = 1
+ITERABLE_LABEL = 2
+REF_LABEL = 3
+FILE_LABEL = 4
+
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
     frozenset, Exception, type(None), types.BuiltinFunctionType, types.GeneratorType,
@@ -30,17 +34,13 @@ _BUILTIN_TYPES = [
 ]
 
 _LOCAL_OBJECT_ATTRS = frozenset([
-    '_RemoteObject__oid', 'vm', '_RemoteObject__class_name', '_RemoteObject__module_name', '_RemoteObject__methods', '__class__', '__cmp__', '__del__', '__delattr__',
+    '_RemoteObject__oid', 'vm', '_RemoteObject__class_name', '_RemoteObject__module_name',
+    '_RemoteObject__methods', '__class__', '__cmp__', '__del__', '__delattr__',
     '__dir__', '__doc__', '__getattr__', '__getattribute_', '__hash__',
     '__init__', '__metaclass__', '__module__', '__new__', '__reduce__',
     '__reduce_ex__', '__repr__', '__setattr__', '__slots__', '__str__',
     '__weakref__', '__dic__', '__members__', '__methods__',
 ])
-
-VALUE_LABEL = 1
-ITERABLE_LABEL = 2
-REF_LABEL = 3
-FILE_LABEL = 4
 
 EXCLUDED_ATTRS = frozenset([
     '__class__', '__cmp__', '__del__', '__delattr__',
@@ -73,6 +73,8 @@ def remove_indentations(code):
 
 
 def inspect_methods(remote_object_cache_name, exculded_methods, oid):
+    """
+    """
     import inspect
     local_object = eval("{remote_object_cache_name}[{oid}]".format(
         remote_object_cache_name=remote_object_cache_name,
@@ -87,6 +89,8 @@ def inspect_methods(remote_object_cache_name, exculded_methods, oid):
 
 
 def handle_unserializable_types(vm, remote_obj_name):
+    """
+    """
     oid = vm._pyro_daemon.evaluate("id({remote_obj_name})".format(
         remote_obj_name=remote_obj_name
     ))
@@ -101,6 +105,8 @@ def handle_unserializable_types(vm, remote_obj_name):
 
 
 def unpack(vm, object):
+    """
+    """
     label, data = object
     if label == VALUE_LABEL:
         return data
@@ -114,10 +120,15 @@ def unpack(vm, object):
 
 
 def pack(obj):
-    # Pack each argument as a tuple(type[reg/ref], value[real value/(oid, class, module, ,methods))
-    # Check if picklable or if stream (ie: file, stdout, etc), and handle  accordingly.
-    # Check if maybe we can implement RemoteFunction, RemoteMethod and RemoteSubmodule here and send it
-    # instead of defining it in vmpie.
+    """
+    Pack each argument as a tuple(type[reg/ref], value[real value/(oid, class, module, ,methods))
+    Check if picklable or if stream (ie: file, stdout, etc), and handle  accordingly.
+    Check if maybe we can implement RemoteFunction, RemoteMethod and RemoteSubmodule here and send it
+    instead of defining it in vmpie.
+    @param obj:
+    @type obj:
+    @return
+    """
     if not isinstance(obj, str) and is_iterable(obj):
         data_type = type(obj)
         unpacked_iterable = [pack(item) for item in obj]
@@ -131,6 +142,8 @@ def pack(obj):
 
 
 def is_iterable(p_object):
+    """
+    """
     try:
         it = iter(p_object)
     except TypeError:
@@ -139,6 +152,8 @@ def is_iterable(p_object):
 
 
 def is_file(p_object):
+    """
+    """
     return isinstance(p_object, file)
 
 
@@ -165,7 +180,7 @@ class RemotePlugin(plugin.Plugin):
         self.vm._pyro_daemon.execute("import inspect")
         self.vm._pyro_daemon.execute("import pickle")
 
-        # Get all the python importable modules on the target machine and inject them to as attributes.
+        # Get all the python importable modules on the target machine and inject them as attributes.
         for module_name in self._get_modules():
             setattr(self, module_name, _RemoteModule(module_name, self.vm))
 
@@ -429,139 +444,3 @@ class _RemoteObject(object):
         theclass = cls._create_class_proxy(oid, vm, class_name, module_name, methods)
         ins = object.__new__(theclass)
         return ins
-
-
-class _RemoteFile(object):
-    """
-    Represents a file object on a remote machine. Acts exactly like Python's regular
-    file objects.
-    """
-    def __init__(self, path, mode, _pyro_daemon):
-        self.__daemon = _pyro_daemon
-        self._name = "file_{id}".format(id=uuid.uuid4().get_hex())
-        self.name = path
-        self.__daemon.execute("{name} = open('{path}', '{mode}')".format(name=self._name, path=path, mode=mode))
-
-    def __enter__(self):
-        """
-        Enable the remote file act as a context manager.
-        @return: I{vmpie.builtin_plugins.remote._RemoteFile}
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Enable the remote file act as a context manager.
-        """
-        self.close()
-
-    def close(self):
-        """
-        Close the remote file.
-        """
-        self.__daemon.execute("{name}.close()".format(name=self._name))
-
-    @property
-    def closed(self):
-        """
-        Return whether the file is closed or not.
-        @return: True if closed, False otherwise
-        @rtype: I{bool}
-        """
-        return self.__daemon.evaluate("{name}.closed".format(name=self._name))
-
-    @property
-    def encoding(self):
-        """
-        Return the encoding of the file.
-        @return: Encoding of the remote file
-        @rtype:
-        """
-        return self.__daemon.evaluate("{name}.encoding".format(name=self._name))
-
-    def fileno(self):
-        """
-        Return the file descriptor for the file on the remote machine.
-        @return: Remote file file-descriptor
-        @rtype: I{int}
-        """
-        return self.__daemon.evaluate("{name}.fileno()".format(name=self._name))
-
-    def write(self, data):
-        """
-        Write data to the remote file.
-        @param data: The data to write
-        @type data: I{str}
-        """
-        return self.__daemon.execute("{name}.write('{data}')".format(name=self._name, data=data))
-
-    def writelines(self, sequence):
-        """
-        Write the strings to the file.
-        @param sequence: The strings to write.
-        @type sequence: I{sequence}
-        @return:
-        """
-        return self.__daemon.execute("{name}.writelines({data})".format(name=self._name, data=str(sequence)))
-
-    def read(self, size=-1):
-        """
-        Read I{size} bytes from the file. If I{size} is omitted, read until EOF.
-        @return: The read data.
-        @rtype: I{str}
-        """
-        return self.__daemon.evaluate("{name}.read({size})".format(name=self._name, size=size))
-
-    def readline(self, size=-1):
-        """
-        Read a line from the file. If I{size} is given, read up to I{size} bytes.
-        @param size: Bytes to read. Defaults to -1, e.g. read 1 line.
-        @type size: I{int}
-        @return: The read data.
-        @rtype: I{str}
-        """
-        return self.__daemon.evaluate("{name}.readline({size})").format(name=self._name, size=size)
-
-    def readlines(self, size):
-        """
-        Read the file as lines. If I{size} is given, read up to I{size} bytes.
-        @param size: Bytes to read. Defaults to -1, e.g. read 1 line.
-        @type size: I{int}
-        @return: The read data.
-        @rtype: I{str}
-        """
-        return self.__daemon.evaluate("{name}.readlines({size})").format(name=self._name, size=size)
-
-    def flush(self):
-        """
-        Flush the machine's I/O buffer.
-        """
-        return self.__daemon.execute("{name}.flush()".format(name=self._name))
-
-    def seek(self, offset, whence=0):
-        """
-        Move the file cursor I{offset} bytes forward.
-        @param offset: Number of bytes to move the cursor by.
-        @type offset: I{int}
-        @param whence: Where to start the seek from. Defaults to the start of the file.
-        @type whence: I{int}
-        """
-        self.__daemon.execute("{name}.seek({offset}, {whence})").format(name=self._name, offset=offset, whence=whence)
-
-    def tell(self):
-        """
-        Return the current position of the file cursor.
-        @return: Current position of the file cursor.
-        @rtype: I{int}
-        """
-        return self.__daemon.execute("{name}.tell()".format(name=self._name))
-
-    def __str__(self):
-        # Determine the file's state
-        state = FILE_CLOSED_STATE if self.closed else FILE_OPEN_STATE
-        return "{state} _RemoteFile at {path}".format(state=state, path=self.name)
-
-    def __repr__(self):
-        # Determine the file's state
-        state = FILE_CLOSED_STATE if self.closed else FILE_OPEN_STATE
-        return "{state} _RemoteFile at {path}".format(state=state, path=self.name)
