@@ -326,7 +326,6 @@ class _RemoteFunction(object):
         """
         self.vm = vm
         self._function_name = func.__name__
-        print inspect.getsource(func)
         self.vm._pyro_daemon.execute(remove_indentations(inspect.getsource(func)))
 
     def __call__(self, *args, **kwargs):
@@ -334,13 +333,10 @@ class _RemoteFunction(object):
         Executes and evaluates the remote function.
         @return: The result of the function.
         """
-        try:
-            args = [pack(arg) for arg in args]
-            kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
-            return unpack(self.vm, self.vm._pyro_daemon.call(pack(self._function_name), args, kwargs))
-            # return unpack(self.vm, self.vm._pyro_daemon)
-        except Exception as e:
-            print e
+        args = [pack(arg) for arg in args]
+        kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
+        return unpack(self.vm, self.vm._pyro_daemon.call(pack(self._function_name), args, kwargs))
+
 
 
 class _RemoteObject(object):
