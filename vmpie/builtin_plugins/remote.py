@@ -71,28 +71,40 @@ def remove_indentations(code):
     return "\n".join(lines)
 
 
-def inspect_methods(remote_object_cache_name, exculded_methods, oid):
+def inspect_methods(remote_object_cache_name, excluded_methods, oid):
     """
+    Return the methods of a an object. This function runs on the remote machine.
+    @param remote_object_cache_name: The unique name of the remote object storage.
+    @type remote_object_cache_name: str
+    @param excluded_methods: Builtin methods this function shoud not return.
+    @type excluded_methods: dict
+    @param oid: The id of the object to inspect.
+    @type oid: int
+    @return: The methods of the object
+    @rtype: I{list}
     """
     import inspect
+
+    # Get the object from the storage
     local_object = eval("{remote_object_cache_name}[{oid}]".format(
         remote_object_cache_name=remote_object_cache_name,
         oid=oid))
     methods = []
 
+    # Get object methods
     for attr in dir(local_object):
         method = getattr(local_object, attr)
-        if attr not in exculded_methods and inspect.ismethod(method):
+        if attr not in excluded_methods and inspect.ismethod(method):
             methods.append((attr, method.__doc__))
+
     return methods
 
 
+# TODO(Cory, Avital): Check if the name is appropriate
 def handle_unserializable_types(vm, remote_obj_name):
     """
     """
-    oid = vm._pyro_daemon.evaluate("id({remote_obj_name})".format(
-        remote_obj_name=remote_obj_name
-    ))
+    oid = vm._pyro_daemon.evaluate("id({remote_obj_name})".format(remote_obj_name=remote_obj_name))
 
     vm._pyro_daemon.execute("{remote_object_cache_name}[{oid}]={remote_obj_name}".format(
         remote_object_cache_name=REMOTE_OBJECT_CACHE_NAME,
@@ -105,14 +117,18 @@ def handle_unserializable_types(vm, remote_obj_name):
 
 def unpack(vm, object):
     """
+    Deserialize objects that were manually serialized.
     """
     label, data = object
+
     if label == VALUE_LABEL:
         return data
+    
     elif label == ITERABLE_LABEL:
         data_type = type(data)
         unpacked_iterable = [unpack(vm, item) for item in data]
         return data_type(unpacked_iterable)
+
     elif label == REF_LABEL or FILE_LABEL:
         oid, class_name, module_name, methods = data
         return _RemoteObject(oid=oid, vm=vm, class_name=class_name, module_name=module_name, methods=methods)
@@ -132,28 +148,41 @@ def pack(obj):
         data_type = type(obj)
         unpacked_iterable = [pack(item) for item in obj]
         return ITERABLE_LABEL, data_type(unpacked_iterable)
+
     elif is_file(obj):
         return FILE_LABEL, obj._RemoteObject__oid
+
     elif type(obj) in _BUILTIN_TYPES:
         return VALUE_LABEL, obj
+
     elif isinstance(obj, _RemoteObject):
         return REF_LABEL, obj._RemoteObject__oid
 
 
-def is_iterable(p_object):
+def is_iterable(obj):
     """
+    Check if an object is iterable
+    @param obj: The object to check
+    @type obj: object
+    @return: Whether the object is iterable or not
+    @rtype: I{bool}
     """
     try:
-        iter(p_object)
+        iter(obj)
     except TypeError:
         return False
     return True
 
 
-def is_file(p_object):
+def is_file(obj):
     """
+    Check if an object is a file.
+    @param obj: The object to check
+    @type obj: object
+    @return: Whether the object is a file or not
+    @rtype: I{bool}
     """
-    return isinstance(p_object, file)
+    return isinstance(obj, file)
 
 
 # ===================================================== CLASSES ====================================================== #
