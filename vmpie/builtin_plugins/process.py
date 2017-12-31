@@ -51,7 +51,6 @@ class ProcessPlugin(plugin.Plugin):
         raise KeyError("{ps} was not found among running processes.".format(ps=ps))
 
     def get_process_by_name(self, ps):
-        # TODO: Check handleWrapper and Popen passing through Pyro4
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -81,7 +80,6 @@ class ProcessPlugin(plugin.Plugin):
                         False,
                         pid
                     )
-                    # HandleWrapper??
                     return proc
 
                 except pywintypes.error as e:
@@ -94,7 +92,6 @@ class ProcessPlugin(plugin.Plugin):
         return self.vm.remote.teleport(_get_process_by_name)(ps)
 
     def get_process_by_pid(self, pid):
-        # TODO: Check handleWrapper and Popen passing through Pyro4
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -122,7 +119,6 @@ class ProcessPlugin(plugin.Plugin):
                         False,
                         pid
                     )
-                    # HandleWrapper??
                     return proc
 
                 except pywintypes.error:
@@ -132,7 +128,7 @@ class ProcessPlugin(plugin.Plugin):
 
         return self.vm.remote.teleport(_get_process_by_pid)(pid)
 
-    def run(self, command, async=False, as_admin=False, daemon=True):
+    def run(self, command, async=False, as_user=False, as_admin=False, daemon=True, shell=False):
         """
         Run a command in the virtual machine.
         @param command: The command to run
@@ -152,28 +148,40 @@ class ProcessPlugin(plugin.Plugin):
         else:
             ps = 'explorer.exe'
 
-        usertoken = self.__get_user_token(ps=ps)
         # Create remote Popen
-        remote_popen = self.vm.remote.subprocess.Popen(
-            args=command,
-            #user_token=usertoken,
-            stdout=self.vm.remote.subprocess.PIPE,
-            stderr=self.vm.remote.subprocess.STDOUT,
-            shell=False,
-            #startup_info=self._create_startup_info(None, daemon),
-            cwd=None,
-            #env=self.vm.env.get_user_environment_block(ps)
-        )
+        if as_user or as_admin:
+            usertoken = self.__get_user_token(ps=ps)
+            # TODO: Create a custom Popen that will handle usertokens and install it on vm
+            remote_popen = self.vm.remote.subprocess.Popen(
+                args=command,
+                user_token=usertoken,
+                stdout=self.vm.remote.subprocess.PIPE,
+                stderr=self.vm.remote.subprocess.STDOUT,
+                shell=shell,
+                #startupinfo=self._create_startup_info(None, daemon),
+                cwd=None,
+                # env=self.vm.env.get_user_environment_block(ps)
+            )
+
+        else:
+            # TODO: Check why startupinfo disables stdout output
+            remote_popen = self.vm.remote.subprocess.Popen(
+                args=command,
+                stdout=self.vm.remote.subprocess.PIPE,
+                stderr=self.vm.remote.subprocess.STDOUT,
+                shell=shell,
+                #startupinfo=self._create_startup_info(None, daemon),
+                cwd=None,
+            )
 
         if async:
             return remote_popen
 
         # Wait for command completion
-        # TODO: stdout and files are PyroStreams and cant be read
-        #output = remote_popen.stdout.read()
+        output = remote_popen.stdout.read()
         return_code = remote_popen.wait()
 
-        return return_code
+        return output, return_code
 
     def kill_process(self, pid):
         """
@@ -187,3 +195,22 @@ class ProcessPlugin(plugin.Plugin):
                                                    pid)
         # Kill process
         self.vm.remote.win32process.TerminateProcess(proc, 0)
+
+    def _create_startup_info(self, windows_rect, daemon):
+        si = self.vm.remote.win32process.STARTUPINFO()
+
+        if daemon:
+            si.dwFlags = si.dwFlags | self.vm.remote.win32con.STARTF_USESHOWWINDOW
+            si.wShowWindow = si.wShowWindow | self.vm.remote.win32con.SW_HIDE
+
+        if windows_rect:
+            si.dwFlags = si.dwFlags | self.vm.remote.win32con.STARTF_USESHOWWINDOW
+            si.dwFlags = si.dwFlags | self.vm.remote.win32con.STARTF_USESIZE | self.vm.remote.win32con.STARTF_USEPOSITION
+
+            si.wShowWindow = si.wShowWindow = si.wShowWindow | self.vm.remote.win32con.SW_SHOWNORMAL
+            si.dwX = windows_rect[0]
+            si.dwY = windows_rect[1]
+            si.dwXSize = windows_rect[2] - windows_rect[0]
+            si.dwYSize = windows_rect[3] - windows_rect[1]
+
+        return si
