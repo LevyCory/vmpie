@@ -124,7 +124,7 @@ class FilesystemPlugin(plugin.Plugin):
         @return: The opened file.
         @rtype: I{vmpie.remote._RemoteFile}
         """
-        # return _RemoteFile(path, mode, self.vm._pyro_daemon)
+        return self.vm.remote.builtin("open", path, mode)
 
     def offline_create_file(self, file_location, file_name, file_content):
 

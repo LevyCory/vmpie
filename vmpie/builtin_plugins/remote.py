@@ -119,19 +119,20 @@ def unpack(vm, object):
     """
     Deserialize objects that were manually serialized.
     """
-    label, data = object
+    if object:
+        label, data = object
 
-    if label == VALUE_LABEL:
-        return data
-    
-    elif label == ITERABLE_LABEL:
-        data_type = type(data)
-        unpacked_iterable = [unpack(vm, item) for item in data]
-        return data_type(unpacked_iterable)
+        if label == VALUE_LABEL:
+            return data
 
-    elif label == REF_LABEL or FILE_LABEL:
-        oid, class_name, module_name, methods = data
-        return _RemoteObject(oid=oid, vm=vm, class_name=class_name, module_name=module_name, methods=methods)
+        elif label == ITERABLE_LABEL:
+            data_type = type(data)
+            unpacked_iterable = [unpack(vm, item) for item in data]
+            return data_type(unpacked_iterable)
+
+        elif label == REF_LABEL or FILE_LABEL:
+            oid, class_name, module_name, methods = data
+            return _RemoteObject(oid=oid, vm=vm, class_name=class_name, module_name=module_name, methods=methods)
 
 
 def pack(obj):
@@ -254,6 +255,10 @@ class RemotePlugin(plugin.Plugin):
         """
         return _RemoteFunction(func, self.vm)
 
+    def builtin(self, name, *args, **kwargs):
+        args = [pack(arg) for arg in args]
+        kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
+        return unpack(self.vm, self.vm._pyro_daemon.invokeBuiltin(name , args, kwargs))
 
 class _RemoteModule(object):
     """
@@ -406,13 +411,23 @@ class _RemoteObject(object):
         if name in _LOCAL_OBJECT_ATTRS:
             object.__delattr__(self, name)
         else:
-            return unpack(self.vm, self.vm._pyro_daemon.delattr(pack(self), name))
+            unpack(self.vm, self.vm._pyro_daemon.delattr(pack(self), name))
 
     def __setattr__(self, name, value):
         if name in _LOCAL_OBJECT_ATTRS:
             object.__setattr__(self, name, value)
         else:
-            return unpack(self.vm, self.vm._pyro_daemon.setattr(pack(self), name, pack(value)))
+            unpack(self.vm, self.vm._pyro_daemon.setattr(pack(self), name, pack(value)))
+
+    def __enter__(self, *args, **kwargs):
+        args = [pack(arg) for arg in args]
+        kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
+        return unpack(self.vm, self.vm._pyro_daemon.callattr(pack(self), '__enter__',  args, kwargs))
+
+    def __exit__(self, *args, **kwargs):
+        args = [pack(arg) for arg in args]
+        kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
+        return unpack(self.vm, self.vm._pyro_daemon.callattr(pack(self), '__exit__',  args, kwargs))
 
     def __dir__(self):
         return unpack(self.vm, self.vm._pyro_daemon.dir(pack(self)))
@@ -422,6 +437,8 @@ class _RemoteObject(object):
 
     def __repr__(self):
         return unpack(self.vm, self.vm._pyro_daemon.repr(pack(self)))
+
+
 
     # def __reduce_ex_(self, proto):
     #     return pickle.loads, (self.vm._pyro_daemon.evaluate("pickle.dumps({remote_object_cache_name}[{oid}])".format(

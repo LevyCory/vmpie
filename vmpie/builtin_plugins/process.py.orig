@@ -50,7 +50,11 @@ class ProcessPlugin(plugin.Plugin):
             return self.vm.remote.win32security.OpenProcessToken(proc.handle, tokenAccess)
         raise KeyError("{ps} was not found among running processes.".format(ps=ps))
 
+<<<<<<< HEAD
     def get_process_by_name(self, ps_name):
+=======
+    def get_process_by_name(self, ps):
+>>>>>>> 1dce793337945bfdc8836a4dd33c6659b0481fd2
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -128,7 +132,7 @@ class ProcessPlugin(plugin.Plugin):
 
         return self.vm.remote.teleport(_get_process_by_pid)(pid)
 
-    def run(self, command, async=False, as_admin=False, daemon=True):
+    def run(self, command, async=False, as_user=False, as_admin=False, daemon=True, shell=False):
         """
         Run a command in the virtual machine.
         @param command: The command to run
@@ -148,6 +152,7 @@ class ProcessPlugin(plugin.Plugin):
         else:
             ps = 'explorer.exe'
 
+<<<<<<< HEAD
         # TODO: Create custom Popen, with token injection
 
         #usertoken = self.__get_user_token(ps=ps)
@@ -163,6 +168,33 @@ class ProcessPlugin(plugin.Plugin):
             cwd=None,
             #env=self.vm.env.get_user_environment_block(ps)
         )
+=======
+        # Create remote Popen
+        if as_user or as_admin:
+            usertoken = self.__get_user_token(ps=ps)
+            # TODO: Create a custom Popen that will handle usertokens and install it on vm
+            remote_popen = self.vm.remote.subprocess.Popen(
+                args=command,
+                user_token=usertoken,
+                stdout=self.vm.remote.subprocess.PIPE,
+                stderr=self.vm.remote.subprocess.STDOUT,
+                shell=shell,
+                #startupinfo=self._create_startup_info(None, daemon),
+                cwd=None,
+                # env=self.vm.env.get_user_environment_block(ps)
+            )
+
+        else:
+            # TODO: Check why startupinfo disables stdout output
+            remote_popen = self.vm.remote.subprocess.Popen(
+                args=command,
+                stdout=self.vm.remote.subprocess.PIPE,
+                stderr=self.vm.remote.subprocess.STDOUT,
+                shell=shell,
+                #startupinfo=self._create_startup_info(None, daemon),
+                cwd=None,
+            )
+>>>>>>> 1dce793337945bfdc8836a4dd33c6659b0481fd2
 
         if async:
             return remote_popen

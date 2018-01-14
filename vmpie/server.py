@@ -5,15 +5,15 @@
 # Author        : Avital Livshits, Cory Levy
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
-
 from __future__ import print_function
 import sys
 import types
-
-from Pyro4 import core
-from Pyro4 import errors
 from Pyro4.utils.flame import Flame
+from Pyro4 import errors, core
+import sys
 from Pyro4.configuration import config
+from Pyro4 import core
+from Pyro4.utils import flame
 
 # ==================================================== CONSTANTS ===================================================== #
 
@@ -39,12 +39,10 @@ _BUILTIN_TYPES = [
     types.InstanceType, types.ClassType, types.DictProxyType
 ]
 
+
 # ==================================================== FUNCTIONS ===================================================== #
 
-
 def is_iterable(p_object):
-    """
-    """
     try:
         iter(p_object)
     except TypeError:
@@ -53,14 +51,10 @@ def is_iterable(p_object):
 
 
 def is_file(p_object):
-    """
-    """
     return isinstance(p_object, file)
 
 
 def inspect_methods(obj):
-    """
-    """
     import inspect
     methods = []
     for attr in dir(obj):
@@ -98,8 +92,6 @@ def connect(location, hmac_key=None):
 
 
 # ===================================================== CLASSES ====================================================== #
-
-
 @core.expose
 class Server(Flame):
     """
@@ -107,6 +99,7 @@ class Server(Flame):
     Usually created by using :py:meth:`core.Daemon.startFlame`.
     Be *very* cautious before starting this: it allows the clients full access to everything on your system.
     """
+
     def __init__(self):
         self.local_storage = {}
         super(Server, self).__init__()
@@ -148,16 +141,12 @@ class Server(Flame):
 
     @core.expose
     def execute(self, code):
-        """
-        execute a piece of code
-        """
+        """execute a piece of code"""
         return self.pack(super(Server, self).execute(code))
 
     @core.expose
     def evaluate(self, expression):
-        """
-        evaluate an expression and return its result
-        """
+        """evaluate an expression and return its result"""
         return self.pack(super(Server, self).evaluate(expression))
 
     @core.expose
@@ -196,6 +185,7 @@ class Server(Flame):
     def setattr(self, object, name, value):
         # Get the attribute of the object, maybe it can be done on the automatically by calling __getattr__?
         object = self.unpack(object)
+        value = self.unpack(value)
         setattr(object, name, value)
 
     @core.expose
@@ -252,7 +242,6 @@ def main(args=None, returnWithoutLooping=False):
     if not hmac and not options.quiet:
         print("Warning: HMAC key not set. Anyone can connect to this server!")
 
-    # flame requires pickle serializer, doesn't work with the others.
     config.SERIALIZERS_ACCEPTED = {"pickle"}
 
     daemon = core.Daemon(host=options.host, port=options.port, unixsocket=options.unixsocket)
@@ -265,9 +254,7 @@ def main(args=None, returnWithoutLooping=False):
         print("server is running.")
 
     if returnWithoutLooping:
-        # for unit testing
-        return daemon, uri
-
+        return daemon, uri  # for unit testing
     else:
         daemon.requestLoop()
     daemon.close()
