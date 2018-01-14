@@ -50,8 +50,7 @@ class ProcessPlugin(plugin.Plugin):
             return self.vm.remote.win32security.OpenProcessToken(proc.handle, tokenAccess)
         raise KeyError("{ps} was not found among running processes.".format(ps=ps))
 
-    def get_process_by_name(self, ps):
-        # TODO: Check handleWrapper and Popen passing through Pyro4
+    def get_process_by_name(self, ps_name):
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -59,7 +58,7 @@ class ProcessPlugin(plugin.Plugin):
         @return: The process handle (if it exists)
         @rtype: I{Popen}
         """
-        def _get_process_by_name(ps):
+        def _get_process_by_name(ps_name):
             import win32api
             import win32con
             import pywintypes
@@ -70,7 +69,7 @@ class ProcessPlugin(plugin.Plugin):
             mgmt = win32com.client.GetObject('winmgmts:')
 
             # Get all processes with the given name
-            process_list = mgmt.ExecQuery("SELECT * from Win32_Process where Caption = '{ps}'".format(ps=ps))
+            process_list = mgmt.ExecQuery("SELECT * from Win32_Process where Caption = '{ps_name}'".format(ps_name=ps_name))
             if process_list:
                 # Get the process PID (if there are many, select the first one)
                 pid = process_list[0].Properties_('ProcessId').Value
@@ -81,7 +80,6 @@ class ProcessPlugin(plugin.Plugin):
                         False,
                         pid
                     )
-                    # HandleWrapper??
                     return proc
 
                 except pywintypes.error as e:
@@ -91,10 +89,9 @@ class ProcessPlugin(plugin.Plugin):
                         raise
             pythoncom.CoUninitialize()
 
-        return self.vm.remote.teleport(_get_process_by_name)(ps)
+        return self.vm.remote.teleport(_get_process_by_name)(ps_name)
 
     def get_process_by_pid(self, pid):
-        # TODO: Check handleWrapper and Popen passing through Pyro4
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -122,7 +119,6 @@ class ProcessPlugin(plugin.Plugin):
                         False,
                         pid
                     )
-                    # HandleWrapper??
                     return proc
 
                 except pywintypes.error:
@@ -152,7 +148,9 @@ class ProcessPlugin(plugin.Plugin):
         else:
             ps = 'explorer.exe'
 
-        usertoken = self.__get_user_token(ps=ps)
+        # TODO: Create custom Popen, with token injection
+
+        #usertoken = self.__get_user_token(ps=ps)
         # Create remote Popen
         remote_popen = self.vm.remote.subprocess.Popen(
             args=command,
@@ -160,6 +158,7 @@ class ProcessPlugin(plugin.Plugin):
             stdout=self.vm.remote.subprocess.PIPE,
             stderr=self.vm.remote.subprocess.STDOUT,
             shell=False,
+            # TODO: Determine why startup_info stops popen from running
             #startup_info=self._create_startup_info(None, daemon),
             cwd=None,
             #env=self.vm.env.get_user_environment_block(ps)
@@ -169,11 +168,10 @@ class ProcessPlugin(plugin.Plugin):
             return remote_popen
 
         # Wait for command completion
-        # TODO: stdout and files are PyroStreams and cant be read
-        #output = remote_popen.stdout.read()
+        output = remote_popen.stdout.read()
         return_code = remote_popen.wait()
 
-        return return_code
+        return output, return_code
 
     def kill_process(self, pid):
         """
