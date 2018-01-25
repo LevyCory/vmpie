@@ -6,6 +6,8 @@
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
+import os
+
 from pyVmomi import vim
 
 from vmpie import consts
@@ -20,9 +22,9 @@ PARAM_INCORRECT_ERRNO = 87
 # ===================================================== CLASSES ====================================================== #
 
 
-class ProcessPlugin(plugin.Plugin):
+class WindowsProcessPlugin(plugin.Plugin):
     """
-    Filesystem operations on virtual machines.
+    Process operations on Windows virtual machines.
     """
     _name = "process"
     _os = [plugin.WINDOWS]
@@ -204,3 +206,103 @@ class ProcessPlugin(plugin.Plugin):
             si.dwYSize = windows_rect[3] - windows_rect[1]
 
         return si
+        
+
+class UnixProcessPlugin(plugin.Plugin):
+    """
+    Process operations on Unix based vms.
+    """
+    _name = "process"
+    _os = [plugin.UNIX]
+
+    _PIDOF_COMMAND = "pidof"
+    _KILLALL_COMMAND = "killall {name}"
+    _RUN_COMMAND_AS_ADMIN_FORMAT = "echo {password} | sudo -S {command}"
+    SIGKILL = 9
+
+    def run(self, command, async=False, as_admin=False, daemon=True, shell=False):
+        """
+        Run a command in the virtual machine.
+        @param command: The command to run
+        @type command: I{str}
+        @param async: Whether to wait for the command completion
+        @type async: I{bool}
+        @param as_admin: Whether to run as an admin
+        @type as_admin: I{bool}
+        @param as_admin: Whether to run in the background (daemon)
+        @type as_admin: I{bool}
+        @return: The remote process (if async=True), otherwise the return code & output.
+        @rtype: I{Popen}
+        """
+        # Rewrite the command using sudo and the password
+        if as_admin:
+            self._RUN_COMMAND_AS_ADMIN_FORMAT.format(password=self.vm.password, command=command)
+            # Needed to run as root
+            shell = True
+
+        # Run the process on the vm
+        # TODO: close_fds might cause problems
+        new_process = self.vm.remote.subprocess.Popen(command, shell=shell, close_fds=daemon)
+
+        # Wait for the process to terminate.
+        if not async:
+            new_process.wait()
+
+        return new_process
+
+    def kill_process(self, process):
+        """
+        Kill a process.
+        @param process: The process id or name.
+        @type pid: int or stings
+        """
+        # If process is a name, get the process pids by name.
+        if type(process) == str:
+            processes_to_terminate = self.get_process_pids(process)
+        else:
+            # Insert pid to list
+            processes_to_terminate = [process]
+
+        # Kill each pid
+        for pid in processes_to_terminate:
+            self.signal_process(pid, self.SIGKILL)
+
+    def get_process_pids(self, name):
+        """
+        Retrieve all process ids associated with a process name.
+        @param name: The name of the process.
+        @type name: str
+        @return: The process pids
+        @rtype: I{list}
+        """
+        # Get the pids of the process
+        pids = self.vm.remote.subprocess.check_output((self._PIDOF_COMMAND, name)).split()
+        return map(int, pids)
+
+    def get_process_by_name(self, name):
+        """
+
+        @param name:
+        @return:
+        """
+        # TODO: Find out how to do that
+        raise NotImplementedError
+
+    def get_process_by_id(self, pid):
+        """
+
+        @param ps:
+        @return:
+        """
+        # TODO: Find out how to do that
+        raise NotImplementedError
+
+    def signal_process(self, pid, signal):
+        """
+        Send a signal to a process.
+        @param pid: The id of the process to signal.
+        @type pid: int
+        @param signal: The signal number to send.
+        @type: int
+        """
+        self.vm.remote.os.kill(pid, signal)
