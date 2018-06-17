@@ -238,7 +238,7 @@ class WindowsProcessPlugin(plugin.Plugin):
             token = self.vm.remote.win32security.OpenThreadToken(
                 self.vm.remote.win32api.GetCurrentThread(),
                 self.vm.remote.win32con.MAXIMUM_ALLOWED, True)
-        except WindowsError:
+        except:
             token = self.vm.remote.win32security.OpenProcessToken(
                 self.vm.remote.win32api.GetCurrentProcess(),
                 self.vm.remote.win32con.MAXIMUM_ALLOWED)
@@ -334,12 +334,9 @@ class WindowsProcessPlugin(plugin.Plugin):
         else:
             startupinfo.wShowWindow = self.vm.remote.win32con.SW_SHOWNORMAL
 
-        startupinfo = STARTUPINFO()
-        startupinfo.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW
         startupinfo.hStdInput = stdin_pipe
         startupinfo.hStdOutput = stdout_pipe
         startupinfo.hStdError = stderr_pipe
-        startupinfo.wShowWindow = SW_HIDE
 
         # if windows_rect:
         #     startupinfo.dwFlags = startupinfo.dwFlags | self.vm.remote.win32con.STARTF_USESHOWWINDOW

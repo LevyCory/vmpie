@@ -129,7 +129,7 @@ class Server(Flame):
         if is_file(obj):
             self.local_storage[id(obj)] = obj
             return FILE_LABEL, (id(obj), obj.__class__.__name__, obj.__class__.__module__, inspect_methods(obj))
-        elif not isinstance(obj, str) and is_iterable(obj):
+        elif not isinstance(obj, str) and not isinstance(obj, unicode) and is_iterable(obj):
             data_type = type(obj)
             unpacked_iterable = [self.pack(item) for item in obj]
             return ITERABLE_LABEL, data_type(unpacked_iterable)

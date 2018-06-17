@@ -113,6 +113,7 @@ OPERATING_SYSTEMS = {
     'winXPHomeGuest': 'nt',
     'winXPPro64Guest': 'nt',
     'winXPProGuest': 'nt',
+    'windows8Server64Guest': 'nt',
 }
 
 # ===================================================== CLASSES ====================================================== #
@@ -187,7 +188,7 @@ class VirtualMachine(object):
         @rtype: I{boolean}
         """
         if not OPERATING_SYSTEMS.get(self._pyVmomiVM.summary.config.guestId):
-            raise Exception("Operating system unknown.")
+            raise Exception("Operating system unknown: {}.".format(self._pyVmomiVM.summary.config.guestId))
 
         return OPERATING_SYSTEMS.get(self._pyVmomiVM.summary.config.guestId) in plugin._os
 

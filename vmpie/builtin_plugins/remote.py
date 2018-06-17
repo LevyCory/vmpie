@@ -207,13 +207,13 @@ class RemotePlugin(plugin.Plugin):
 
     def connect(self):
         """
-        Connects to the Pyro server on the target machine.
+        Connects to the Pyro server on the target   machine.
         @return: Pyro4 proxy to the Pyro server on the target machine.
         @rtype: Pyro4.Proxy
         """
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
         # TODO: Don't hardcode the URI
-        return  Pyro4.Proxy("PYRO:Vmpie.Server@192.168.70.72:2808")
+        self.vm._pyro_daemon = Pyro4.Proxy("PYRO:Vmpie.Server@10.0.0.135:2808")
 
 
     def load_modules(self):
