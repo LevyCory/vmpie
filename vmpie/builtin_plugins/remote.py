@@ -205,14 +205,6 @@ class RemotePlugin(plugin.Plugin):
         """
         super(RemotePlugin, self).__init__(vm)
 
-        self.vm._pyro_daemon = self.connect()
-        self.vm._pyro_daemon.execute("import inspect")
-        self.vm._pyro_daemon.execute("import pickle")
-
-        # Get all the python importable modules on the target machine and inject them as attributes.
-        for module_name in self._get_modules():
-            setattr(self, module_name, _RemoteModule(module_name, self.vm))
-
     def connect(self):
         """
         Connects to the Pyro server on the target machine.
@@ -221,7 +213,23 @@ class RemotePlugin(plugin.Plugin):
         """
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
         # TODO: Don't hardcode the URI
-        return Pyro4.Proxy("PYRO:Vmpie.Server@192.168.70.72:2808")
+        return  Pyro4.Proxy("PYRO:Vmpie.Server@192.168.70.72:2808")
+
+
+    def load_modules(self):
+        self.vm._pyro_daemon.execute("import inspect")
+        self.vm._pyro_daemon.execute("import pickle")
+
+        # Get all the python importable modules on the target machine and inject them as attributes.
+        for module_name in self._get_modules():
+            setattr(self, module_name, _RemoteModule(module_name, self.vm))
+
+    def is_loaded(self):
+        try:
+            if self.vm._pyro_daemon:
+                return True
+        except Exception:
+            return False
 
     def execute(self, code):
         """

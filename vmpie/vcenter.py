@@ -2,6 +2,7 @@ import time
 import base64
 import atexit
 import logging
+import ssl
 from threading import Thread
 
 from pyVmomi import vim
@@ -51,11 +52,9 @@ class VCenter(object):
                 using given username and password.")
             # TODO: Raise login exception
 
-        except Exception as exc:
-            if isinstance(exc, vim.fault.HostConnectFault) \
-                    and '[SSL: CERTIFICATE_VERIFY_FAILED' in exc.msg:
+        except (vim.fault.HostConnectFault, ssl.SSLError) as exc:
+            if '[SSL: CERTIFICATE_VERIFY_FAILED' in str(exc):
                 try:
-                    import ssl
                     default_context = ssl._create_default_https_context
                     ssl._create_default_https_context = ssl._create_unverified_context
                     self._connection = SmartConnect(
@@ -134,7 +133,7 @@ class VCenter(object):
     def get_folder(self, folder_name):
         return folder.Folder(folder_name)
 
-    def get_machines_by_folder(self, folder_name):
+    def get_vms_by_folder(self, folder_name):
         return folder.Folder(folder_name).vms
 
     def backup(self):
@@ -142,7 +141,7 @@ class VCenter(object):
         vm_paths = utils._get_all_vm_paths()
 
     def __str__(self):
-        return '<VCenter: {vc_name}>'.format(vc_name=self.name)
+        return '<VCenter: {vc_name}>'.format(vc_name=self._connection.content.about.fullName)
 
     def __repr__(self):
-        return '<VCenter: {vc_name}>'.format(vc_name=self.name)
+        return '<VCenter: {vc_name}>'.format(vc_name=self._connection.content.about.fullName)

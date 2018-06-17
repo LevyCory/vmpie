@@ -172,3 +172,10 @@ def bytes_to_human(size, suffix='B'):
     return "%.1f%f%f" % (size, unit, suffix)
 
 
+def wait_for_task(task):
+    while True:
+        if task.info.state == 'success':
+            return task.info.result
+
+        if task.info.state == 'error':
+            raise Exception("there was an error")

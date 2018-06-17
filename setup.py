@@ -20,7 +20,7 @@ setup(
         'requests',
         'six>=1.7.3',
         # FIXME: pyvmoni-tools is not in the PyPI and therefore cannot be a dependency.
-        'pyvmomi_tools',
+        # 'pyvmomi_tools',
         'Pyro4',
         'urllib3'
     ]

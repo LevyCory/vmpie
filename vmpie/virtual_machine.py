@@ -17,6 +17,104 @@ import vmpie
 from decorators import connected
 from vmpie.builtin_plugins.remote import RemotePlugin
 
+
+# ===================================================== CONSTS ====================================================== #
+
+OPERATING_SYSTEMS = {
+    'asianux3_64Guest': 'posix',
+    'asianux3Guest': 'posix',
+    'asianux4_64Guest': 'posix',
+    'asianux4Guest': 'posix',
+    'centos64Guest': 'posix',
+    'centosGuest': 'posix',
+    'darwin64Guest': 'posix',
+    'darwinGuest': 'posix',
+    'debian4_64Guest': 'posix',
+    'debian4Guest': 'posix',
+    'debian5_64Guest': 'posix',
+    'debian5Guest': 'posix',
+    'dosGuest': 'posix',
+    'eComStationGuest': 'posix',
+    'freebsd64Guest': 'posix',
+    'freebsdGuest': 'posix',
+    'mandriva64Guest': 'posix',
+    'mandrivaGuest': 'posix',
+    'netware4Guest': 'posix',
+    'netware5Guest': 'posix',
+    'netware6Guest': 'posix',
+    'nld9Guest': 'posix',
+    'oesGuest': 'posix',
+    'openServer5Guest': 'posix',
+    'openServer6Guest': 'posix',
+    'oracleLinux64Guest': 'posix',
+    'oracleLinuxGuest': 'posix',
+    'os2Guest': 'posix',
+    'other24xLinux64Guest': 'posix',
+    'other24xLinuxGuest': 'posix',
+    'other26xLinux64Guest': 'posix',
+    'other26xLinuxGuest': 'posix',
+    'otherGuest': 'posix',
+    'otherGuest64': 'posix',
+    'otherLinux64Guest': 'posix',
+    'otherLinuxGuest': 'posix',
+    'redhatGuest': 'posix',
+    'rhel2Guest': 'posix',
+    'rhel3_64Guest': 'posix',
+    'rhel3Guest': 'posix',
+    'rhel4_64Guest': 'posix',
+    'rhel4Guest': 'posix',
+    'rhel5_64Guest': 'posix',
+    'rhel5Guest': 'posix',
+    'rhel6_64Guest': 'posix',
+    'rhel6Guest': 'posix',
+    'sjdsGuest': 'posix',
+    'sles10_64Guest': 'posix',
+    'sles10Guest': 'posix',
+    'sles11_64Guest': 'posix',
+    'sles11Guest': 'posix',
+    'sles64Guest': 'posix',
+    'slesGuest': 'posix',
+    'solaris10_64Guest': 'posix',
+    'solaris10Guest': 'posix',
+    'solaris6Guest': 'posix',
+    'solaris7Guest': 'posix',
+    'solaris8Guest': 'posix',
+    'solaris9Guest': 'posix',
+    'suse64Guest': 'posix',
+    'suseGuest': 'posix',
+    'turboLinux64Guest': 'posix',
+    'turboLinuxGuest': 'posix',
+    'ubuntu64Guest': 'posix',
+    'ubuntuGuest': 'posix',
+    'unixWare7Guest': 'posix',
+    'win2000AdvServGuest': 'nt',
+    'win2000ProGuest': 'nt',
+    'win2000ServGuest': 'nt',
+    'win31Guest': 'nt',
+    'win95Guest': 'nt',
+    'win98Guest': 'nt',
+    'windows7_64Guest': 'nt',
+    'windows7Guest': 'nt',
+    'windows7Server64Guest': 'nt',
+    'winLonghorn64Guest': 'nt',
+    'winLonghornGuest': 'nt',
+    'winMeGuest': 'nt',
+    'winNetBusinessGuest': 'nt',
+    'winNetDatacenter64Guest': 'nt',
+    'winNetDatacenterGuest': 'nt',
+    'winNetEnterprise64Guest': 'nt',
+    'winNetEnterpriseGuest': 'nt',
+    'winNetStandard64Guest': 'nt',
+    'winNetStandardGuest': 'nt',
+    'winNetWebGuest': 'nt',
+    'winNTGuest': 'nt',
+    'winVista64Guest': 'nt',
+    'winVistaGuest': 'nt',
+    'winXPHomeGuest': 'nt',
+    'winXPPro64Guest': 'nt',
+    'winXPProGuest': 'nt',
+}
+
 # ===================================================== CLASSES ====================================================== #
 
 
@@ -88,7 +186,10 @@ class VirtualMachine(object):
         @return: Whether the plugin is compatible with the guest OS or not.
         @rtype: I{boolean}
         """
-        return self.remote.os.name in plugin._os
+        if not OPERATING_SYSTEMS.get(self._pyVmomiVM.summary.config.guestId):
+            raise Exception("Operating system unknown.")
+
+        return OPERATING_SYSTEMS.get(self._pyVmomiVM.summary.config.guestId) in plugin._os
 
     def load_plugin(self, plugin):
         """
