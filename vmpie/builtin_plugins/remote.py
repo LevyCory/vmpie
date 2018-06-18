@@ -10,6 +10,9 @@ import sys
 import uuid
 import types
 import inspect
+import pickle
+from collections import Mapping
+
 import Pyro4
 import vmpie.consts as consts
 import vmpie.plugin as plugin
@@ -24,6 +27,8 @@ VALUE_LABEL = 1
 ITERABLE_LABEL = 2
 REF_LABEL = 3
 FILE_LABEL = 4
+MAPPING_LABEL = 5
+PICKLED_LABEL = 6
 
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
@@ -122,6 +127,9 @@ def unpack(vm, object):
     if object:
         label, data = object
 
+        if label == PICKLED_LABEL:
+            return pickle.loads(data)
+
         if label == VALUE_LABEL:
             return data
 
@@ -129,6 +137,12 @@ def unpack(vm, object):
             data_type = type(data)
             unpacked_iterable = [unpack(vm, item) for item in data]
             return data_type(unpacked_iterable)
+
+        elif label == MAPPING_LABEL:
+            for key, value in data.items():
+                if isinstance(value, tuple):
+                    data[key] = unpack(vm, value)
+            return data
 
         elif label == REF_LABEL or FILE_LABEL:
             oid, class_name, module_name, methods = data
@@ -145,7 +159,16 @@ def pack(obj):
     @type obj:
     @return
     """
-    if not isinstance(obj, str) and is_iterable(obj):
+    if is_file(obj):
+        return FILE_LABEL, obj._RemoteObject__oid
+
+    elif isinstance(obj, Mapping):
+        for key, value in obj.items():
+            if not isinstance(value, str):
+                obj[key] = pack(value)
+        return MAPPING_LABEL, obj
+
+    elif not isinstance(obj, str) and is_iterable(obj):
         data_type = type(obj)
         unpacked_iterable = [pack(item) for item in obj]
         return ITERABLE_LABEL, data_type(unpacked_iterable)

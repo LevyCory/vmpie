@@ -7,6 +7,14 @@
 # ===================================================== IMPORTS ====================================================== #
 from __future__ import print_function
 import sys
+import os
+from collections import Mapping
+
+os.environ["FLAME_ENABLED"] = "true"
+os.environ["PYRO_FLAME_ENABLED"] = "true"
+os.environ["PYRO_SERIALIZERS_ACCEPTED"] = '{"pickle"}'
+os.environ["PYRO_SERIALIZER"] = "pickle"
+import pickle
 import types
 from Pyro4.utils.flame import Flame
 from Pyro4 import errors, core
@@ -17,12 +25,15 @@ from Pyro4.utils import flame
 
 # ==================================================== CONSTANTS ===================================================== #
 
+
 SERVER_NAME = "Vmpie.Server"
 
 VALUE_LABEL = 1
 ITERABLE_LABEL = 2
 REF_LABEL = 3
 FILE_LABEL = 4
+MAPPING_LABEL = 5
+PICKLED_LABEL = 1
 
 EXCLUDED_ATTRS = frozenset([
     '__class__', '__cmp__', '__del__', '__delattr__',
@@ -33,9 +44,12 @@ EXCLUDED_ATTRS = frozenset([
 ])
 
 _BUILTIN_TYPES = [
-    type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
-    frozenset, Exception, type(None), types.BuiltinFunctionType, types.GeneratorType,
-    types.ModuleType, types.FunctionType, basestring, unicode, long, xrange, type(iter(xrange(10))), file,
+    type, object, bool, complex, dict, float, int, list, slice, str, tuple,
+    set,
+    frozenset, Exception, type(None), types.BuiltinFunctionType,
+    types.GeneratorType,
+    types.ModuleType, types.FunctionType, basestring, unicode, long, xrange,
+    type(iter(xrange(10))), file,
     types.InstanceType, types.ClassType, types.DictProxyType
 ]
 
@@ -59,7 +73,8 @@ def inspect_methods(obj):
     methods = []
     for attr in dir(obj):
         method = getattr(obj, attr)
-        if attr not in EXCLUDED_ATTRS and (inspect.ismethod(method) or inspect.isbuiltin(method)):
+        if attr not in EXCLUDED_ATTRS and (
+                inspect.ismethod(method) or inspect.isbuiltin(method)):
             methods.append((attr, method.__doc__))
     return methods
 
@@ -71,10 +86,12 @@ def start(daemon):
     """
     if config.FLAME_ENABLED:
         if set(config.SERIALIZERS_ACCEPTED) != {"pickle"}:
-            raise errors.SerializeError("Flame requires the pickle serializer exclusively")
+            raise errors.SerializeError(
+                "Flame requires the pickle serializer exclusively")
         return daemon.register(Server(), SERVER_NAME)
     else:
-        raise errors.SecurityError("Flame is disabled in the server configuration")
+        raise errors.SecurityError(
+            "Flame is disabled in the server configuration")
 
 
 def connect(location, hmac_key=None):
@@ -106,18 +123,27 @@ class Server(Flame):
 
     def unpack(self, object):
         label, data = object
+
         if label == VALUE_LABEL:
             return data
         elif label == ITERABLE_LABEL:
             data_type = type(data)
             unpacked_iterable = [self.unpack(item) for item in data]
             return data_type(unpacked_iterable)
+        elif label == MAPPING_LABEL:
+            for key, value in data.items():
+                if isinstance(value, tuple):
+                    data[key] = self.unpack(value)
+            return data
         elif label == REF_LABEL or FILE_LABEL:
             try:
                 return self.local_storage[data]
             except KeyError:
                 # TODO: Create custom exception with oid to catch in local client and notify with object doesn't exists
                 raise
+
+    # TODO: Add a function to check if packing is needed.
+    # TODO: Better handling of dicts! For each item check if packing is needed and unpack accordingly.
 
     def pack(self, obj):
         """
@@ -128,8 +154,17 @@ class Server(Flame):
         """
         if is_file(obj):
             self.local_storage[id(obj)] = obj
-            return FILE_LABEL, (id(obj), obj.__class__.__name__, obj.__class__.__module__, inspect_methods(obj))
-        elif not isinstance(obj, str) and not isinstance(obj, unicode) and is_iterable(obj):
+            return FILE_LABEL, (
+            id(obj), obj.__class__.__name__, obj.__class__.__module__,
+            inspect_methods(obj))
+        elif isinstance(obj, Mapping):
+            for key, value in obj.items():
+                if not isinstance(value, str):
+                    obj[key] = self.pack(value)
+            return MAPPING_LABEL, obj
+        elif not isinstance(obj, str) and not isinstance(obj,
+                                                         unicode) and is_iterable(
+                obj):
             data_type = type(obj)
             unpacked_iterable = [self.pack(item) for item in obj]
             return ITERABLE_LABEL, data_type(unpacked_iterable)
@@ -137,7 +172,9 @@ class Server(Flame):
             return VALUE_LABEL, obj
         else:
             self.local_storage[id(obj)] = obj
-            return REF_LABEL, (id(obj), obj.__class__.__name__, obj.__class__.__module__, inspect_methods(obj))
+            return REF_LABEL, (
+            id(obj), obj.__class__.__name__, obj.__class__.__module__,
+            inspect_methods(obj))
 
     @core.expose
     def execute(self, code):
@@ -153,7 +190,8 @@ class Server(Flame):
     def invokeBuiltin(self, builtin, args, kwargs):
         args = [self.unpack(arg) for arg in args]
         kwargs = {key: self.unpack(value) for key, value in kwargs.iteritems()}
-        return self.pack(super(Server, self).invokeBuiltin(builtin, args, kwargs))
+        return self.pack(
+            super(Server, self).invokeBuiltin(builtin, args, kwargs))
 
     @core.expose
     def invokeModule(self, dottedname, args, kwargs):
@@ -226,12 +264,15 @@ class Server(Flame):
 
 def main(args=None, returnWithoutLooping=False):
     from optparse import OptionParser
-
     parser = OptionParser()
-    parser.add_option("-H", "--host", default="localhost", help="hostname to bind server on (default=%default)")
-    parser.add_option("-p", "--port", type="int", default=0, help="port to bind server on")
-    parser.add_option("-u", "--unixsocket", help="Unix domain socket name to bind server on")
-    parser.add_option("-q", "--quiet", action="store_true", default=False, help="don't output anything")
+    parser.add_option("-H", "--host", default="localhost",
+                      help="hostname to bind server on (default=%default)")
+    parser.add_option("-p", "--port", type="int", default=0,
+                      help="port to bind server on")
+    parser.add_option("-u", "--unixsocket",
+                      help="Unix domain socket name to bind server on")
+    parser.add_option("-q", "--quiet", action="store_true", default=False,
+                      help="don't output anything")
     parser.add_option("-k", "--key", help="the HMAC key to use")
     options, args = parser.parse_args(args)
 
@@ -244,10 +285,12 @@ def main(args=None, returnWithoutLooping=False):
 
     config.SERIALIZERS_ACCEPTED = {"pickle"}
 
-    daemon = core.Daemon(host=options.host, port=options.port, unixsocket=options.unixsocket)
+    daemon = core.Daemon(host=options.host, port=options.port,
+                         unixsocket=options.unixsocket)
 
     if hmac:
         daemon._pyroHmacKey = hmac
+
     uri = start(daemon)
     if not options.quiet:
         print("server uri: %s" % uri)

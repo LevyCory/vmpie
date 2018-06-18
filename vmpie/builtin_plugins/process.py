@@ -35,8 +35,8 @@ class WindowsProcessPlugin(plugin.Plugin):
             tokenAccess=self.vm.remote.win32security.TOKEN_QUERY |
                         self.vm.remote.win32security.TOKEN_DUPLICATE |
                         self.vm.remote.win32security.TOKEN_ASSIGN_PRIMARY,
-                        ps=ps
-            )
+            ps=ps
+        )
 
     def __get_logged_on_user_token(self, tokenAccess, ps='explorer.exe'):
         """
@@ -181,12 +181,13 @@ class WindowsProcessPlugin(plugin.Plugin):
         return output, return_code
 
     def run_as_user(self, command, args, username=None, password=None,
-                    domain=None, deamon=False):
+                    domain=None, daemon=False):
         if not (username or password or domain):
             # Run as currently logged on user
             usertoken = self.__get_user_token(ps='explorer.exe')
 
         else:
+            # Get user's token
             usertoken = self.vm.remote.win32security.LogonUser(
                 username, domain, password,
                 self.vm.remote.win32con.LOGON32_LOGON_INTERACTIVE,
@@ -198,39 +199,52 @@ class WindowsProcessPlugin(plugin.Plugin):
         if username and password:
             sids.append(self._lookup_sid(domain, username))
 
-        # Create std pipes
-        stdin_pipe, stdin_name = self._create_named_pipe(sids)
-        stdout_pipe, stdout_name = self._create_named_pipe(sids)
-        stderr_pipe, stderr_name = self._create_named_pipe(sids)
+        # Create security attributes
+        if sids is None:
+            sattrs = None
+        else:
+            sattrs = self._create_security_attributes(
+                *sids,
+                access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
+            )
+
+        # Create pipe handles
+        stdin_handle_read, stdin_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
+        stdout_handle_read, stdout_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
+        stderr_handle_read, stderr_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
+
+        self.vm.remote.win32api.SetHandleInformation(stdin_handle_write,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
+
+        self.vm.remote.win32api.SetHandleInformation(stdout_handle_read,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
+
+        self.vm.remote.win32api.SetHandleInformation(stderr_handle_read,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
 
         # Create process's startup info
-        startup_info = self._create_startup_info(
-            deamon, stdin_pipe, stdout_pipe, stderr_pipe
+        startup_info = self._create_startup_info(stdin_handle_read,
+                                                 stdout_handle_write,
+                                                 stderr_handle_write,
+                                                 daemon
         )
 
         # Create process
         res = self.vm.remote.win32process.CreateProcessAsUser(
-            usertoken, command, args, None, None, False,
+            usertoken, command, args, sattrs, None, False,
             self.vm.remote.win32con.CREATE_NEW_CONSOLE,
             self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
             startup_info)
 
-        process_handle = res[0]
-        res[1].Close()  # Close the thread handle
-        pid = res[2]
+        process_handle = res[0]  # The process handle
+        res[1].Close()  # Close the thread handle - not relevant
+        pid = res[2]  # The pid
 
-        # Connect to the pipes
-        self.vm.remote.win32pipe.ConnectNamedPipe(stdin_pipe)
-        self.vm.remote.win32pipe.ConnectNamedPipe(stdout_pipe)
-        self.vm.remote.win32pipe.ConnectNamedPipe(stderr_pipe)
-
-        # Wait for process to finish
-        self.vm.remote.win32event.WaitForSingleObject(
-            process_handle,
-            self.vm.remote.win32event.INFINITE
-        )
-
-        return pid, stdout_pipe, stderr_pipe
+        # Remember to close the process!
+        return pid, process_handle, stdin_handle_write, stdout_handle_read, stderr_handle_read
 
     def _get_current_sid(self):
         """INTERNAL: get current SID."""
@@ -291,7 +305,7 @@ class WindowsProcessPlugin(plugin.Plugin):
                 pipe = self.vm.remote.win32pipe.CreateNamedPipe(
                     name,
                     self.vm.remote.win32con.PIPE_ACCESS_DUPLEX,
-                    0, 1, 1, 1,
+                    0, 1, 65536, 65536,
                     100000, sattrs
 
                 )
@@ -322,11 +336,14 @@ class WindowsProcessPlugin(plugin.Plugin):
         # Kill process
         self.vm.remote.win32process.TerminateProcess(proc, 0)
 
-    def _create_startup_info(self, daemon=False, stdin_pipe=None, stdout_pipe=None,
-                             stderr_pipe=None):
+    def _create_startup_info(self, stdin_handle,
+                             stdout_handle,
+                             stderr_handle,
+                             daemon=False):
 
         startupinfo = self.vm.remote.win32process.STARTUPINFO()
         startupinfo.dwFlags |= self.vm.remote.win32con.STARTF_USESHOWWINDOW
+        startupinfo.lpDesktop = 'winsta0\default'
 
         if daemon:
             startupinfo.wShowWindow = self.vm.remote.win32con.SW_HIDE
@@ -334,19 +351,9 @@ class WindowsProcessPlugin(plugin.Plugin):
         else:
             startupinfo.wShowWindow = self.vm.remote.win32con.SW_SHOWNORMAL
 
-        startupinfo.hStdInput = stdin_pipe
-        startupinfo.hStdOutput = stdout_pipe
-        startupinfo.hStdError = stderr_pipe
-
-        # if windows_rect:
-        #     startupinfo.dwFlags = startupinfo.dwFlags | self.vm.remote.win32con.STARTF_USESHOWWINDOW
-        #     startupinfo.dwFlags = startupinfo.dwFlags | self.vm.remote.win32con.STARTF_USEstartupinfoZE | self.vm.remote.win32con.STARTF_USEPOstartupinfoTION
-        #
-        #     startupinfo.wShowWindow = startupinfo.wShowWindow = startupinfo.wShowWindow | self.vm.remote.win32con.SW_SHOWNORMAL
-        #     startupinfo.dwX = windows_rect[0]
-        #     startupinfo.dwY = windows_rect[1]
-        #     startupinfo.dwXstartupinfoze = windows_rect[2] - windows_rect[0]
-        #     startupinfo.dwYstartupinfoze = windows_rect[3] - windows_rect[1]
+        startupinfo.hStdInput = stdin_handle
+        startupinfo.hStdOutput = stdout_handle
+        startupinfo.hStdError = stderr_handle
 
         return startupinfo
 
