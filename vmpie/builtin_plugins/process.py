@@ -205,46 +205,73 @@ class WindowsProcessPlugin(plugin.Plugin):
         else:
             sattrs = self._create_security_attributes(
                 *sids,
+                inherit=True,
                 access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
             )
 
-        # Create pipe handles
-        stdin_handle_read, stdin_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
-        stdout_handle_read, stdout_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
-        stderr_handle_read, stderr_handle_write = self.vm.remote.win32pipe.CreatePipe(None, 0)
+        # # Create pipe handles
+        # stdin_handle_read, stdin_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
+        # stdout_handle_read, stdout_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
+        # stderr_handle_read, stderr_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
+        #
+        # self.vm.remote.win32api.SetHandleInformation(stdin_handle_write,
+        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+        #                                              0)
+        #
+        # self.vm.remote.win32api.SetHandleInformation(stdout_handle_read,
+        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+        #                                              0)
+        #
+        # self.vm.remote.win32api.SetHandleInformation(stderr_handle_read,
+        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+        #                                              0)
+        #
 
-        self.vm.remote.win32api.SetHandleInformation(stdin_handle_write,
+        # Create the named pipes
+        stdin_pipe, stdin_name = self._create_named_pipe(sids)
+        stdout_pipe, stdout_name = self._create_named_pipe(sids)
+        stderr_pipe, stderr_name = self._create_named_pipe(sids)
+
+        # Make sure that the parent process's pipe ends are not inherited
+        self.vm.remote.win32api.SetHandleInformation(stdin_pipe,
                                                      self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
                                                      0)
-
-        self.vm.remote.win32api.SetHandleInformation(stdout_handle_read,
+        self.vm.remote.win32api.SetHandleInformation(stdout_pipe,
                                                      self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
                                                      0)
-
-        self.vm.remote.win32api.SetHandleInformation(stderr_handle_read,
+        self.vm.remote.win32api.SetHandleInformation(stderr_pipe,
                                                      self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
                                                      0)
 
         # Create process's startup info
-        startup_info = self._create_startup_info(stdin_handle_read,
-                                                 stdout_handle_write,
-                                                 stderr_handle_write,
+        startup_info = self._create_startup_info(stdin_name,
+                                                 stdout_name,
+                                                 stderr_name,
                                                  daemon
         )
 
         # Create process
         res = self.vm.remote.win32process.CreateProcessAsUser(
-            usertoken, command, args, sattrs, None, False,
+            usertoken, command, args, sattrs, None, True,
             self.vm.remote.win32con.CREATE_NEW_CONSOLE,
-            self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
+            # self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
+            None, None,
             startup_info)
 
         process_handle = res[0]  # The process handle
         res[1].Close()  # Close the thread handle - not relevant
         pid = res[2]  # The pid
 
+        # Connect to the pipes
+        self.vm.remote.win32pipe.ConnectNamedPipe(stdin_pipe)
+        self.vm.remote.win32pipe.ConnectNamedPipe(stdout_pipe)
+        self.vm.remote.win32pipe.ConnectNamedPipe(stderr_pipe)
+
+        # Wait for the process to complete
+        # self.vm.remote.win32event.WaitForSingleObject(process_handle, self.vm.remote.win32event.INFINITE)
+
         # Remember to close the process!
-        return pid, process_handle, stdin_handle_write, stdout_handle_read, stderr_handle_read
+        return pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe
 
     def _get_current_sid(self):
         """INTERNAL: get current SID."""
@@ -336,13 +363,13 @@ class WindowsProcessPlugin(plugin.Plugin):
         # Kill process
         self.vm.remote.win32process.TerminateProcess(proc, 0)
 
-    def _create_startup_info(self, stdin_handle,
-                             stdout_handle,
-                             stderr_handle,
+    def _create_startup_info(self, stdin_name,
+                             stdout_name,
+                             stderr_name,
                              daemon=False):
 
         startupinfo = self.vm.remote.win32process.STARTUPINFO()
-        startupinfo.dwFlags |= self.vm.remote.win32con.STARTF_USESHOWWINDOW
+        startupinfo.dwFlags |= self.vm.remote.win32con.STARTF_USESTDHANDLES | self.vm.remote.win32con.STARTF_USESHOWWINDOW
         startupinfo.lpDesktop = 'winsta0\default'
 
         if daemon:
@@ -351,9 +378,39 @@ class WindowsProcessPlugin(plugin.Plugin):
         else:
             startupinfo.wShowWindow = self.vm.remote.win32con.SW_SHOWNORMAL
 
-        startupinfo.hStdInput = stdin_handle
-        startupinfo.hStdOutput = stdout_handle
-        startupinfo.hStdError = stderr_handle
+        # Get the named pipes
+        stdin_pipe = self.vm.remote.win32file.CreateFile(stdin_name,
+                                                         self.vm.remote.win32con.GENERIC_READ,
+                                                         0, None,
+                                                         self.vm.remote.win32con.OPEN_EXISTING,
+                                                         0, None)
+
+        # Make sure the pipe handles are inherited
+        self.vm.remote.win32api.SetHandleInformation(stdin_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     1)
+        stdout_pipe = self.vm.remote.win32file.CreateFile(stdout_name,
+                                                          self.vm.remote.win32con.GENERIC_WRITE,
+                                                          0, None,
+                                                          self.vm.remote.win32con.OPEN_EXISTING,
+                                                          0, None)
+        # Make sure the pipe handles are inherited
+        self.vm.remote.win32api.SetHandleInformation(stdout_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     1)
+        stderr_pipe = self.vm.remote.win32file.CreateFile(stderr_name,
+                                                          self.vm.remote.win32con.GENERIC_WRITE,
+                                                          0, None,
+                                                          self.vm.remote.win32con.OPEN_EXISTING,
+                                                          0, None)
+        # Make sure the pipe handles are inherited
+        self.vm.remote.win32api.SetHandleInformation(stderr_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     1)
+        # Set the process's std pipes
+        startupinfo.hStdInput = stdin_pipe
+        startupinfo.hStdOutput = stdout_pipe
+        startupinfo.hStdError = stderr_pipe
 
         return startupinfo
 
@@ -363,6 +420,7 @@ class WindowsProcessPlugin(plugin.Plugin):
         status = 'data'
         while True:
             try:
+                # TODO: Read File is stuck if process is complete or if no data is available. Handle this.
                 err, data = self.vm.remote.win32file.ReadFile(handle, chunk_size)
                 assert err == 0  # not expecting error w/o overlapped io
             except WindowsError, e:
