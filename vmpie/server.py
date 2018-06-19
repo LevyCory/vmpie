@@ -132,8 +132,7 @@ class Server(Flame):
             return data_type(unpacked_iterable)
         elif label == MAPPING_LABEL:
             for key, value in data.items():
-                if isinstance(value, tuple):
-                    data[key] = self.unpack(value)
+                data[key] = self.unpack(value)
             return data
         elif label == REF_LABEL or FILE_LABEL:
             try:
@@ -142,8 +141,8 @@ class Server(Flame):
                 # TODO: Create custom exception with oid to catch in local client and notify with object doesn't exists
                 raise
 
-    # TODO: Add a function to check if packing is needed.
-    # TODO: Better handling of dicts! For each item check if packing is needed and unpack accordingly.
+    # TODO: Add a function to check if packing is needed (for smarter packing)
+    # TODO: Maybe we could just pass references to all objects? Why passing the objects at all?
 
     def pack(self, obj):
         """
@@ -152,27 +151,28 @@ class Server(Flame):
         Check if maybe we can implement RemoteFunction, RemoteMethod and RemoteSubmodule here and send it
         instead of defining it in vmpie.
         """
-        if is_file(obj):
-            self.local_storage[id(obj)] = obj
-            return FILE_LABEL, (
-            id(obj), obj.__class__.__name__, obj.__class__.__module__,
-            inspect_methods(obj))
-        elif isinstance(obj, Mapping):
-            for key, value in obj.items():
-                if not isinstance(value, str):
+        try:
+            if is_file(obj):
+                self.local_storage[id(obj)] = obj
+                return FILE_LABEL, (
+                id(obj), obj.__class__.__name__, obj.__class__.__module__,
+                inspect_methods(obj))
+            elif isinstance(obj, Mapping):
+                for key, value in obj.items():
                     obj[key] = self.pack(value)
-            return MAPPING_LABEL, obj
-        elif not isinstance(obj, str) and not isinstance(obj,
-                                                         unicode) and is_iterable(
-                obj):
-            data_type = type(obj)
-            unpacked_iterable = [self.pack(item) for item in obj]
-            return ITERABLE_LABEL, data_type(unpacked_iterable)
-        elif type(obj) in _BUILTIN_TYPES:
-            return VALUE_LABEL, obj
-        else:
-            self.local_storage[id(obj)] = obj
-            return REF_LABEL, (
+                return MAPPING_LABEL, obj
+            elif not isinstance(obj, basestring) and is_iterable(obj):
+                data_type = type(obj)
+                unpacked_iterable = [self.pack(item) for item in obj]
+                return ITERABLE_LABEL, data_type(unpacked_iterable)
+            elif type(obj) in _BUILTIN_TYPES:
+                return VALUE_LABEL, obj
+        except Exception:
+            # TODO: Log errors to a log file
+            pass
+
+        self.local_storage[id(obj)] = obj
+        return REF_LABEL, (
             id(obj), obj.__class__.__name__, obj.__class__.__module__,
             inspect_methods(obj))
 
