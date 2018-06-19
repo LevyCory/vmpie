@@ -168,7 +168,7 @@ def pack(obj):
                 obj[key] = pack(value)
         return MAPPING_LABEL, obj
 
-    elif not isinstance(obj, str) and is_iterable(obj):
+    elif not isinstance(obj, basestring) and is_iterable(obj):
         data_type = type(obj)
         unpacked_iterable = [pack(item) for item in obj]
         return ITERABLE_LABEL, data_type(unpacked_iterable)

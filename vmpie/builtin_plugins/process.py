@@ -180,7 +180,7 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         return output, return_code
 
-    def run_as_user(self, command, args, username=None, password=None,
+    def run_as_user(self, command, username=None, password=None,
                     domain=None, daemon=False):
         if not (username or password or domain):
             # Run as currently logged on user
@@ -209,24 +209,6 @@ class WindowsProcessPlugin(plugin.Plugin):
                 access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
             )
 
-        # # Create pipe handles
-        # stdin_handle_read, stdin_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
-        # stdout_handle_read, stdout_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
-        # stderr_handle_read, stderr_handle_write = self.vm.remote.win32pipe.CreatePipe(sattrs, 0)
-        #
-        # self.vm.remote.win32api.SetHandleInformation(stdin_handle_write,
-        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-        #                                              0)
-        #
-        # self.vm.remote.win32api.SetHandleInformation(stdout_handle_read,
-        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-        #                                              0)
-        #
-        # self.vm.remote.win32api.SetHandleInformation(stderr_handle_read,
-        #                                              self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-        #                                              0)
-        #
-
         # Create the named pipes
         stdin_pipe, stdin_name = self._create_named_pipe(sids)
         stdout_pipe, stdout_name = self._create_named_pipe(sids)
@@ -252,7 +234,7 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         # Create process
         res = self.vm.remote.win32process.CreateProcessAsUser(
-            usertoken, command, args, sattrs, None, True,
+            usertoken, None, command, sattrs, None, True,
             self.vm.remote.win32con.CREATE_NEW_CONSOLE,
             # self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
             None, None,
@@ -370,7 +352,6 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         startupinfo = self.vm.remote.win32process.STARTUPINFO()
         startupinfo.dwFlags |= self.vm.remote.win32con.STARTF_USESTDHANDLES | self.vm.remote.win32con.STARTF_USESHOWWINDOW
-        startupinfo.lpDesktop = 'winsta0\default'
 
         if daemon:
             startupinfo.wShowWindow = self.vm.remote.win32con.SW_HIDE
