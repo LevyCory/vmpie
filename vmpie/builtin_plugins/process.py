@@ -19,7 +19,10 @@ import vmpie.plugin as plugin
 # ==================================================== CONSTANTS ===================================================== #
 
 PARAM_INCORRECT_ERRNO = 87
+BUFFER_SIZE = 4096
 PIPE_NAME = r'\\.\pipe\vmpie-{}'
+PS_COMMAND = '$objUser = New-Object System.Security.Principal.NTAccount("{}", "{}"); $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier]); return $strSID.Value'
+
 # ===================================================== CLASSES ====================================================== #
 
 
@@ -137,57 +140,31 @@ class WindowsProcessPlugin(plugin.Plugin):
         except:
             return False
 
-    def run(self, command, async=False, as_admin=False, daemon=True):
+    def run(self, command, username=None, password=None,
+                    domain=None, daemon=False, as_admin=False):
         """
-        Run a command in the virtual machine.
-        @param command: The command to run
-        @type command: I{str}
-        @param async: Whether to wait for the command completion
-        @type async: I{bool}
-        @param as_admin: Whether to run as an admin
-        @type as_admin: I{bool}
-        @param as_admin: Whether to run in the background (daemon)
-        @type as_admin: I{bool}
-        @return: The remote process (if async=True), otherwise the return code & output.
-        @rtype: I{_RemotePopen (if async=True), otherwise (int, str)}
+        Run a command as another user
+        :param command: {str} The command to run
+        :param username: {str} The username to run as (optional)
+        :param domain: {str} The domain of the user
+        :param password: {str} The password of the user
+        :param daemon: {bool} Whether to run in the background or not
+        :param as_admin: {bool} Whether to run as admin.
+            If this is set to True, then the username, domain & password
+            are ignored and the process will be ran as the owner of
+             winlogon.exe process.
+        :return:  {int, PyHANDLE, PyHANDLE, PyHANDLE, PyHANDLE} pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe
         """
-        # Determine as which user to run the command as
         if as_admin and not self._is_admin():
-            # Get the user token from wht winlogon.exe process
+            # Get the user token from the winlogon.exe process
             usertoken = self.__get_user_token(ps='winlogon.exe')
 
-        # TODO: Create custom Popen, with token injection
-
-        #usertoken = self.__get_user_token(ps=ps)
-        # Create remote Popen
-        remote_popen = self.vm.remote.subprocess.Popen(
-            args=command,
-            stdout=self.vm.remote.subprocess.PIPE,
-            stderr=self.vm.remote.subprocess.STDOUT,
-            shell=False,
-            # TODO: Determine why startup_info stops popen from running
-            #startup_info=self._create_startup_info(None, daemon),
-            cwd=None,
-            #env=self.vm.env.get_user_environment_block(ps)
-        )
-
-        if async:
-            return remote_popen
-
-        # Wait for command completion
-        output = remote_popen.stdout.read()
-        return_code = remote_popen.wait()
-
-        return output, return_code
-
-    def run_as_user(self, command, username=None, password=None,
-                    domain=None, daemon=False):
-        if not (username or password or domain):
+        elif not (username or password or domain):
             # Run as currently logged on user
             usertoken = self.__get_user_token(ps='explorer.exe')
 
         else:
-            # Get user's token
+            # Get token of given user
             usertoken = self.vm.remote.win32security.LogonUser(
                 username, domain, password,
                 self.vm.remote.win32con.LOGON32_LOGON_INTERACTIVE,
@@ -197,14 +174,15 @@ class WindowsProcessPlugin(plugin.Plugin):
         sids = [self._get_current_sid()]
 
         if username and password:
+            # Get the sid of the given user
             sids.append(self._lookup_sid(domain, username))
 
-        # Create security attributes
         if sids is None:
             sattrs = None
         else:
+            # Create the security attributes
             sattrs = self._create_security_attributes(
-                *sids,
+                sids,
                 inherit=True,
                 access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
             )
@@ -225,6 +203,18 @@ class WindowsProcessPlugin(plugin.Plugin):
                                                      self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
                                                      0)
 
+        try:
+            # Create environment for the usertoken
+            environment = self.vm.remote.win32profile.CreateEnvironmentBlock(usertoken, False)
+        except:
+            environment = None
+
+        try:
+            # Get the user profile directory of the given user
+            profile_dir = self.vm.remote.win32profile.GetUserProfileDirectory(usertoken)
+        except:
+            profile_dir = None
+
         # Create process's startup info
         startup_info = self._create_startup_info(stdin_name,
                                                  stdout_name,
@@ -232,12 +222,12 @@ class WindowsProcessPlugin(plugin.Plugin):
                                                  daemon
         )
 
-        # Create process
+        # Create the process
         res = self.vm.remote.win32process.CreateProcessAsUser(
             usertoken, None, command, sattrs, None, True,
             self.vm.remote.win32con.CREATE_NEW_CONSOLE,
             # self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
-            None, None,
+            environment, profile_dir,
             startup_info)
 
         process_handle = res[0]  # The process handle
@@ -249,14 +239,14 @@ class WindowsProcessPlugin(plugin.Plugin):
         self.vm.remote.win32pipe.ConnectNamedPipe(stdout_pipe)
         self.vm.remote.win32pipe.ConnectNamedPipe(stderr_pipe)
 
-        # Wait for the process to complete
-        # self.vm.remote.win32event.WaitForSingleObject(process_handle, self.vm.remote.win32event.INFINITE)
-
         # Remember to close the process!
-        return pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe
+        return WinProcess(self.vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe)
 
     def _get_current_sid(self):
-        """INTERNAL: get current SID."""
+        """
+        Get the current process's / thread's sid
+        :return: {PySID} The sid
+        """
         try:
             token = self.vm.remote.win32security.OpenThreadToken(
                 self.vm.remote.win32api.GetCurrentThread(),
@@ -271,16 +261,35 @@ class WindowsProcessPlugin(plugin.Plugin):
         )[0]
 
     def _lookup_sid(self, domain, username):
-        """INTERNAL: lookup the SID for a user in a domain."""
-        return self.vm.remote.win32security.LookupAccountName(domain, username)[0]
+        """
+        Get the sid of a user by domain and username
+        :param domain: {str} The domain
+        :param username: {str} The username
+        :return: {PySID} The sid
+        """
+        try:
+            return self.vm.remote.win32security.LookupAccountName(domain, username)[0]
+        except Exception:
+            try:
+                p = self.vm.remote.subprocess.Popen(["powershell", '-NoProfile', '-Command',
+                                      PS_COMMAND.format(domain, username)],
+                                     stdout=self.vm.remote.subprocess.PIPE)
+                return self.vm.remote.win32security.ConvertStringSidToSid(
+                    p.communicate()[0].strip("\r\n"))
+            except Exception:
+                raise Exception("Unable to get SID of {}\\{}".format(domain, username))
 
-    def _create_security_attributes(self, *sids, **kwargs):
-        """INTERNAL: create a SECURITY_ATTRIBUTES structure."""
-        inherit = kwargs.get('inherit', 0)
-        access = kwargs.get('access',
-                            self.vm.remote.win32con.GENERIC_READ |
-                            self.vm.remote.win32con.GENERIC_WRITE
-                            )
+    def _create_security_attributes(self, sids, inherit=False, access=None):
+        """
+        Create a SECURITY_ATTRIBUTES structure.
+        :param sids: {list} The sids to grant access to in the security attributes
+        :param inherit: {bool} Whether to inherit handles or not
+        :param access: {int} The access to grant
+        :return: {SECURITY_ATTRIBUTES} The security attributes
+        """
+        if not access:
+            access = self.vm.remote.win32con.GENERIC_READ | self.vm.remote.win32con.win32con.GENERIC_WRITE
+
         attr = self.vm.remote.win32security.SECURITY_ATTRIBUTES()
         attr.bInheritHandle = inherit
 
@@ -298,12 +307,16 @@ class WindowsProcessPlugin(plugin.Plugin):
         return attr
 
     def _create_named_pipe(self, sids=None):
-        """INTERNAL: create a named pipe."""
+        """
+        Create a named pipe.
+        :param sids: {list} The sids to grant access to the pipe
+        :return: {tuple} (The pipe, the name of the pipe)
+        """
         if sids is None:
             sattrs = None
         else:
             sattrs = self._create_security_attributes(
-                *sids,
+                sids,
                 access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
             )
 
@@ -349,7 +362,14 @@ class WindowsProcessPlugin(plugin.Plugin):
                              stdout_name,
                              stderr_name,
                              daemon=False):
-
+        """
+        Create the startup info for a process
+        :param stdin_name: {str} The name of the stdin pipe
+        :param stdout_name: {str} The name of the stdout pipe
+        :param stderr_name: {str} The name of the stderr pipe
+        :param daemon: {bool} Thether to run in the background or not
+        :return: {STARTUPINFO} The startup info
+        """
         startupinfo = self.vm.remote.win32process.STARTUPINFO()
         startupinfo.dwFlags |= self.vm.remote.win32con.STARTF_USESTDHANDLES | self.vm.remote.win32con.STARTF_USESHOWWINDOW
 
@@ -394,33 +414,6 @@ class WindowsProcessPlugin(plugin.Plugin):
         startupinfo.hStdError = stderr_pipe
 
         return startupinfo
-
-    def _pipe_chunk_reader(self, handle, chunk_size=2048):
-        """INTERNAL: Reader thread that reads stdout/stderr of the child
-        process."""
-        status = 'data'
-        while True:
-            try:
-                # TODO: Read File is stuck if process is complete or if no data is available. Handle this.
-                err, data = self.vm.remote.win32file.ReadFile(handle, chunk_size)
-                assert err == 0  # not expecting error w/o overlapped io
-            except WindowsError, e:
-                if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
-                    status = 'eof'
-                    data = ''
-                else:
-                    status = 'error'
-                    data = e.winerror
-            return data, status
-
-    def read(self, handle):
-        data = ""
-        chunk, status = self._pipe_chunk_reader(handle)
-        while status == 'data':
-            data += chunk
-            chunk, status = self._pipe_chunk_reader(handle)
-
-        return data
 
 
 class UnixProcessPlugin(plugin.Plugin):
@@ -521,3 +514,163 @@ class UnixProcessPlugin(plugin.Plugin):
         @type: int
         """
         self.vm.remote.os.kill(pid, signal)
+
+
+class WinProcess(object):
+    def __init__(self, vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe):
+        self.vm = vm
+        self.pid = pid
+        self.process_handle = process_handle
+        self.stdin_pipe = stdin_pipe
+        self.stdout_pipe = stdout_pipe
+        self.stderr_pipe = stderr_pipe
+
+    @property
+    def returncode(self):
+        """
+        The return code of the process (None if process is still running)
+        :return: {int} The return code
+        """
+        returncode = self.vm.remote.win32process.GetExitCodeProcess(
+            self.process_handle)
+
+        if returncode != 259:
+            # 259 returncode is STILL_ACTIVE
+            return returncode
+
+    def wait(self, timeout=None):
+        """
+        Wait for process and return its return code
+        :param process_handle: {PyHANDLE} The process handle
+        :return: {int} The return code of the process
+        """
+        if not timeout:
+            timeout = self.vm.remote.win32event.INFINITE
+
+        # Wait for the process to complete
+        self.vm.remote.win32event.WaitForSingleObject(self.process_handle, timeout)
+
+        # Get return code
+        return self.vm.remote.win32process.GetExitCodeProcess(self.process_handle)
+
+    def kill(self):
+        """
+        Kill the process
+        """
+        proc = self.vm.remote.win32api.OpenProcess(
+            self.vm.remote.win32com.PROCESS_ALL_ACCESS,
+            False,
+            self.pid)
+        # Kill process
+        self.vm.remote.win32process.TerminateProcess(proc, 0)
+
+        self.process_handle.close()
+        self.stdin_pipe.close()
+        self.stdout_pipe.close()
+        self.stderr_pipe.close()
+
+    def write(self, data, newline=True):
+        """
+        Write data to stdin
+        :param data: {str} The data to write to the stdin
+        :param newline: {bool} Whether to add newline (\n) after the data
+        """
+        self.vm.remote.win32file.WriteFile(self.stdin_pipe, data)
+        if newline:
+            self.vm.remote.win32file.WriteFile(self.stdin_pipe, "\n")
+
+    def read_stdout(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stdout pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        output = ""
+
+        try:
+            while True:
+                # Read from stdout
+                # TODO: Check why ERROR_BROKEN_PIPE is not being raised!
+                output += self.vm.remote.win32file.ReadFile(self.stdout_pipe, chunk)[1]
+        except self.vm.remote.pywintypes.error as e:
+            if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
+                # Pipe is closed - no more data to read from the pipe
+                pass
+            else:
+                raise
+
+        self.stdout_pipe.close()
+        return output
+
+    def read_stderr(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stderr pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        output = ""
+
+        try:
+            while True:
+                # Read from stdout
+                # TODO: Check why ERROR_BROKEN_PIPE is not being raised!
+                output += self.vm.remote.win32file.ReadFile(self.stderr_pipe, chunk)[1]
+        except self.vm.remote.pywintypes.error as e:
+            if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
+                # Pipe is closed - no more data to read from the pipe
+                pass
+            else:
+                raise
+
+        self.stderr_pipe.close()
+        return output
+
+    def read_stdout_nonblocking(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stdout pipe non blocking (read only the
+        currently available data)
+        :param chunk: {int} The size of the chunk to read
+        :return: {str} The output
+        """
+        try:
+            # Read from stdout
+            buffer, bytes_to_read, result = self.vm.remote.win32pipe.PeekNamedPipe(self.stderr_pipe, 0)
+            if bytes_to_read:
+                return self.vm.remote.win32file.ReadFile(self.stdout_pipe, min(bytes_to_read, chunk))[1]
+        except self.vm.remote.pywintypes.error as e:
+            if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
+                # Pipe is closed - no more data to read from the pipe
+                pass
+            else:
+                raise
+
+        return ""
+
+    def read_stderr_nonblocking(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stderr pipe non blocking (read only the
+        currently available data)
+        :param chunk: {int} The size of the chunk to read
+        :return: {str} The output
+        """
+        try:
+            # Read from stderr
+            buffer, bytes_to_read, result = self.vm.remote.win32pipe.PeekNamedPipe(
+                self.stderr_pipe, 0)
+            if bytes_to_read:
+                return self.vm.remote.win32file.ReadFile(self.stderr_pipe,
+                                                         min(bytes_to_read,
+                                                             chunk))[1]
+        except self.vm.remote.pywintypes.error as e:
+            if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
+                # Pipe is closed - no more data to read from the pipe
+                pass
+            else:
+                raise
+
+        return ""
+    def __del__(self):
+        self.process_handle.close()
+        self.stdin_pipe.close()
+        self.stdout_pipe.close()
+        self.stderr_pipe.close()
