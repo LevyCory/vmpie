@@ -35,6 +35,10 @@ class Plugin(object):
 
     def __init__(self, vm):
         self.vm = vm
+        self._setup_()
+
+    def _setup_(self):
+        pass
 
     def __str__(self):
         return "<Plugin {name} on vm {vm}>".format(name=self._name, vm=self.vm.name)
