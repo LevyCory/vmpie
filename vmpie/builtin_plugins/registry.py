@@ -25,7 +25,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
 
     def _setup_(self):
         """
-        Load remote VM's constants of base registry keys
+        Load remote VM's constants of base registry keys and permission related constants
         """
         self._base_keys = {
             "HKCR": self.vm.remote._winreg.HKEY_CLASSES_ROOT,
@@ -44,35 +44,46 @@ class WindowsRegistryPlugin(plugin.Plugin):
 
     def _get_base_key(self, base_key):
         """
-
-        @param base_key:
-        @return:
+        Return the corresponding constant for a given registry base key.
+        @param base_key: The base key.
+        @type base_key: I{str}
+        @return: The constant representing the desired base key.
+        @rtype: I{int}
         """
         try:
             return self._base_keys[base_key.upper()]
         except ValueError:
-            raise
+            raise ValueError("There is no base key with the name {name}".format(name=base_key))
 
     def get_value(self, base_key, sub_key, name):
         """
-
-        @param base_key:
-        @param sub_key:
-        @param name:
-        @return:
+        Read a value with the name I{name} from the registry key I{base_key\sub_key}
+        @param base_key: The value's base key.
+        @type base_key: I{str}
+        @param sub_key: The full path to the value without the base key
+        @type sub_key: I{str}
+        @param name: The value's name
+        @type name: I{str}
+        @return: The registry value.
+        @rtype: tuple
         """
         with self.vm.remote._winreg.OpenKey(self._get_base_key(base_key), sub_key) as reg_key:
             return self.vm.remote._winreg.QueryValueEx(reg_key, name)
 
     def set_value(self, base_key, sub_key, name, type, value):
         """
-
-        @param base_key:
-        @param sub_key:
-        @param name:
-        @param type:
-        @param value:
-        @return:
+        Set a value on the remote VM's registry.
+        @param base_key: The base key of the registry value.
+        @type base_key: I{str}
+        @param sub_key: The path of the registry key, without the base key.
+        @type sub_key: I{str}
+        @param name: The name of the value to set.
+        @type name: I{str}
+        @param type: The data type of the value to set. one of the predefined constants starting with REG
+                     in this module.
+        @type type: I{int}
+        @param value: The data to write into the registry value.
+        @type value: I{int}
         """
         permissions = self.vm.remote._winreg.KEY_WRITE
         with self.vm.remote._winreg.OpenKey(self._get_base_key(base_key), sub_key, 0, permissions) as reg_key:
@@ -80,10 +91,12 @@ class WindowsRegistryPlugin(plugin.Plugin):
 
     def enumerate_key(self, base_key, sub_key):
         """
-
-        @param base_key:
-        @param sub_key:
-        @return:
+        Allow the user to iterate over values of a given registry key. This method is a generator.
+        @param base_key: The base key of the registry value.
+        @type base_key: I{str}
+        @param sub_key: The path of the registry key, without the base key.
+        @type sub_key: I{str}
+        @return: A value in the given key.
         @rtype: tuple
         """
         index = -1
@@ -95,18 +108,23 @@ class WindowsRegistryPlugin(plugin.Plugin):
             try:
                 index += 1
                 yield self.vm.remote._winreg.EnumKey(key, index)
+
             except WindowsError:
-                yield StopIteration
+                pass
+
             finally:
+                # Ensure key closing
                 key.close()
 
-    def delete_key(self, base_key, sub_key, name):
+    def delete_value(self, base_key, sub_key, name):
         """
-        Delete a registry key.
-        @param base_key:
-        @param sub_key:
-        @param name:
-        @return:
+        Delete a registry value.
+        @param base_key: The value's base key
+        @type base_key: I{str}
+        @param sub_key: The path of the registry key, without the base key.
+        @type sub_key: I{str}
+        @param name: The name of the value.
+        @type name: I{str}
         """
         permissions = self.vm.remote._winreg.KEY_WRITE
         with self.vm.remote._winreg.OpenKey(self._get_base_key(base_key), sub_key, 0, permissions) as reg_key:
