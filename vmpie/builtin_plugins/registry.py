@@ -61,7 +61,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @rtype: I{PyHANDLE}
         """
         base_key = self._base_keys[base_key.upper()]
-        handle = self.win32api.OpenRegistryKeyEx(base_key, sub_key, 0, access_rights)
+        handle = self.win32api.RegOpenKeyEx(base_key, sub_key, 0, access_rights)
 
         yield handle
 
@@ -79,7 +79,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @return: The registry value.
         @rtype: tuple
         """
-        with self._registry_key(base_key, sub_key, self.win32con.REG_ALL_ACCESS) as reg_key:
+        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
             return self.win32api.RegQueryValueEx(reg_key, name)
 
     def set_value(self, base_key, sub_key, name, type, value):
@@ -97,7 +97,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @param value: The data to write into the registry value.
         @type value: I{int}
         """
-        with self._registry_key(base_key, sub_key, self.win32con.REG_ALL_ACCESS) as reg_key:
+        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
             self.win32api.RegSetValueEx(reg_key, name, 0, type, value)
 
     def delete_value(self, base_key, sub_key, name):
@@ -110,5 +110,5 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @param name: The name of the value.
         @type name: I{str}
         """
-        with self._registry_key(base_key, sub_key, self.win32con.REG_ALL_ACCESS) as reg_key:
+        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
             self.win32api.RegDeleteKey(reg_key, name)
