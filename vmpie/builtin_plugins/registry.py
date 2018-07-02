@@ -38,7 +38,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
             "HKCC": self.win32con.HKEY_CURRENT_CONFIG,
             "HKDD": self.win32con.HKEY_DYN_DATA,
             "HKPD": self.win32con.HKEY_PERFORMANCE_DATA,
-            "HKCU": self.win32con.HKEY_CLASSES_ROOT,
+            "HKCU": self.win32con.HKEY_CURRENT_USER,
             "HKU": self.win32con.HKEY_USERS,
         }
 
