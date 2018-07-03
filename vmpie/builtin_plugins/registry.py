@@ -13,7 +13,19 @@ import vmpie.plugin as plugin
 # ==================================================== CONSTANTS ===================================================== #
 
 PLUGIN_NAME = "registry"
-WIN32CON_TYPE_PREFIX = "REG"
+REGISTRY_TYPE_NAMES = (
+    'REG_BINARY',
+    'REG_DWORD',
+    'REG_DWORD_LITTLE_ENDIAN',
+    'REG_DWORD_BIG_ENDIAN',
+    'REG_EXPAND_SZ',
+    'REG_LINK',
+    'REG_MULTI_SZ',
+    'REG_NONE',
+    'REG_QWORD',
+    'REG_QWORD_LITTLE_ENDIAN',
+    'REG_SZ'
+)
 
 # ===================================================== CLASSES ====================================================== #
 
@@ -29,26 +41,25 @@ class WindowsRegistryPlugin(plugin.Plugin):
         """
         Load remote VM's constants of base registry keys and permission related constants
         """
-        self.win32con = self.vm.remote.win32con
-        self.win32api = self.vm.remote.win32api
+        self._win32con = self.vm.remote.win32con
+        self._win32api = self.vm.remote.win32api
 
         self._base_keys = {
-            "HKCR": self.win32con.HKEY_CLASSES_ROOT,
-            "HKLM": self.win32con.HKEY_LOCAL_MACHINE,
-            "HKCC": self.win32con.HKEY_CURRENT_CONFIG,
-            "HKDD": self.win32con.HKEY_DYN_DATA,
-            "HKPD": self.win32con.HKEY_PERFORMANCE_DATA,
-            "HKCU": self.win32con.HKEY_CURRENT_USER,
-            "HKU": self.win32con.HKEY_USERS,
+            "HKCR": self._win32con.HKEY_CLASSES_ROOT,
+            "HKLM": self._win32con.HKEY_LOCAL_MACHINE,
+            "HKCC": self._win32con.HKEY_CURRENT_CONFIG,
+            "HKDD": self._win32con.HKEY_DYN_DATA,
+            "HKPD": self._win32con.HKEY_PERFORMANCE_DATA,
+            "HKCU": self._win32con.HKEY_CURRENT_USER,
+            "HKU": self._win32con.HKEY_USERS,
         }
 
         # Inject type constants to the plugin
-        for attr in dir(self.win32con):
-            if attr.startswith(WIN32CON_TYPE_PREFIX):
-                setattr(self, attr, getattr(self.win32con, attr))
+        for attr in REGISTRY_TYPE_NAMES:
+                setattr(self, attr, getattr(self._win32con, attr))
 
     @contextmanager
-    def _registry_key(self, base_key, sub_key, access_rights):
+    def _open_registry_key(self, base_key, sub_key, access_rights):
         """
         A context manager that ensures the proper use of registry handles.
         @param base_key: The base key of the key to open
@@ -60,12 +71,15 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @return: An open handle to the registry key
         @rtype: I{PyHANDLE}
         """
+        # Create a handle to the registry key
         base_key = self._base_keys[base_key.upper()]
-        handle = self.win32api.RegOpenKeyEx(base_key, sub_key, 0, access_rights)
+        handle = self._win32api.RegOpenKeyEx(base_key, sub_key, 0, access_rights)
 
+        # Yield the handle to the context manager for further action
         yield handle
 
-        self.win32api.RegCloseKey(handle)
+        # Close the registry handle
+        self._win32api.RegCloseKey(handle)
 
     def get_value(self, base_key, sub_key, name):
         """
@@ -79,8 +93,8 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @return: The registry value.
         @rtype: tuple
         """
-        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
-            return self.win32api.RegQueryValueEx(reg_key, name)
+        with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
+            return self._win32api.RegQueryValueEx(reg_key, name)
 
     def set_value(self, base_key, sub_key, name, type, value):
         """
@@ -97,8 +111,8 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @param value: The data to write into the registry value.
         @type value: I{int}
         """
-        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
-            self.win32api.RegSetValueEx(reg_key, name, 0, type, value)
+        with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
+            self._win32api.RegSetValueEx(reg_key, name, 0, type, value)
 
     def delete_value(self, base_key, sub_key, name):
         """
@@ -110,5 +124,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @param name: The name of the value.
         @type name: I{str}
         """
-        with self._registry_key(base_key, sub_key, self.win32con.KEY_ALL_ACCESS) as reg_key:
-            self.win32api.RegDeleteKey(reg_key, name)
+        with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
+            self._win32api.RegDeleteValue(reg_key, name)
+
+    #TODO(CORY): Delete Key, Create Key, Get Key
