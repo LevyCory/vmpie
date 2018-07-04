@@ -188,7 +188,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @type base_key: I{str}
         @param sub_key: The key's full path with the base key omitted.
         @type sub_key: I{str}
-        @return: Values that are stored in the supplied key.
+        @return: Values' names, their data and the data type.
         @rtype: I{tuple}
         """
         index = -1
