@@ -182,6 +182,7 @@ def pack(obj):
     elif isinstance(obj, _RemoteObject):
         return REF_LABEL, obj._RemoteObject__oid
 
+    import pdb; pdb.set_trace()
 
 def is_iterable(obj):
     """
