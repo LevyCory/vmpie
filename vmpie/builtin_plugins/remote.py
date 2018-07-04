@@ -219,14 +219,15 @@ class RemotePlugin(plugin.Plugin):
     _name = "remote"
     _os = [plugin.UNIX, plugin.WINDOWS]
 
-    def __init__(self, vm):
+    def _setup_(self):
         """
         Creates a remote plugin object and injects all the python importable modules on
         the target machine to the object.
         @param vm: The target machine
         @type vm: vmpie.virtual_machine.VirtualMachine
         """
-        super(RemotePlugin, self).__init__(vm)
+        self.connect()
+        self.load_modules()
 
     def connect(self):
         """
