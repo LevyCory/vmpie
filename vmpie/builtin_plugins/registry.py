@@ -3,6 +3,18 @@
 # Purpose       : Provide a convenient way to perform filesystem related operations on virtual machines.
 # Date Created  : 29/06/2018
 # Author        : Avital Livshits, Cory Levy
+# Remarks       : In this module there are some technical terms describing certain parts of the Windows Registry.
+#                 To use this module you should have a basic understanding of the these terms.
+#
+#                 base key: The hive key of the windows registry. In the registry itself it can be seen as
+#                           the topmost keys like HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE and so on. In this module,
+#                           the parameter base_key is always the acronym string of those values. For example, if I
+#                           want to do something in the HKEY_CURRENT_USER tree, I should pass "HKCU" as the value for
+#                           base_key. This is the proper and only acceptable usage of this module.
+#
+#                 sub key:  The subordinate key is the rest of the registry key's path after the base (hive) key.
+#                           If we are reading the key HKCU\Software\Google\Chrome then HKCU is the base key and
+#                           "Software\Google\Chrome" is the sub key.
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
@@ -58,6 +70,16 @@ class WindowsRegistryPlugin(plugin.Plugin):
         for attr in REGISTRY_TYPE_NAMES:
                 setattr(self, attr, getattr(self._win32con, attr))
 
+    def _get_base_key(self, base_key):
+        """
+        Get the corresponding constant for the supplied registry hive key.
+        @param base_key: A shortened string that represents a registry base key. For example, "HKCU".
+        @type base_key: I{str}
+        @return: The constant representing the key on the target machine.
+        @rtype: I{int}
+        """
+        return self._base_keys[base_key.upper()]
+
     @contextmanager
     def _open_registry_key(self, base_key, sub_key, access_rights):
         """
@@ -72,7 +94,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @rtype: I{PyHANDLE}
         """
         # Create a handle to the registry key
-        base_key = self._base_keys[base_key.upper()]
+        base_key = self._get_base_key(base_key)
         handle = self._win32api.RegOpenKeyEx(base_key, sub_key, 0, access_rights)
 
         # Yield the handle to the context manager for further action
@@ -127,4 +149,74 @@ class WindowsRegistryPlugin(plugin.Plugin):
         with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
             self._win32api.RegDeleteValue(reg_key, name)
 
-    #TODO(CORY): Delete Key, Create Key, Get Key
+    def create_key(self, base_key, sub_key):
+        """
+        Create a new empty registry key.
+        @param base_key: The value's base key.
+        @type base_key: I{str}
+        @param sub_key: The full path to the value without the base key
+        @type sub_key: I{str}
+        """
+        handle = None
+
+        try:
+            # Create the registry key
+            handle = self._win32api.RegCreateKey(self._get_base_key(base_key), sub_key)
+
+        except Exception:
+            raise WindowsError("Could not create registry key")
+
+        # Ensure proper closure of registry key
+        finally:
+            if handle is not None:
+                self._win32api.RegCloseKey(handle)
+
+
+    def delete_key(self, base_key, sub_key):
+        """
+        Delete a registry key along with all of it's values
+        @param base_key: The key's base key.
+        @type base_key: I{str}
+        @param sub_key: The key's full path with the base key omitted.
+        @type sub_key: I{str}
+        """
+        self._win32api.RegDeleteKey(self._get_base_key(base_key), sub_key)
+
+    def enumerate_key(self, base_key, sub_key):
+        """
+        Enumerate a registry key. This is a generator for easy iteration over registry keys.
+        @param base_key: The key's base key.
+        @type base_key: I{str}
+        @param sub_key: The key's full path with the base key omitted.
+        @type sub_key: I{str}
+        @return: Values that are stored in the supplied key.
+        @rtype: Tuple
+        """
+        index = -1
+        with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
+            # Iterate over the registry key
+            while True:
+                try:
+                    index += 1
+                    # Yield each registry value
+                    yield self._win32api.RegEnumKey(reg_key, index)
+                except Exception:
+                    # Either an exception occurred or the we've reached the end of the registry key.
+                    break
+
+    def read_key(self, base_key, sub_key):
+        """
+        Read a registry key. Get all values of a registry key at once.
+        @param base_key: The key's base key.
+        @type base_key: I{str}
+        @param sub_key: The key's full path with the base key omitted.
+        @type sub_key: I{str}
+        @return: The key's values.
+        @rtype: I{list}
+        """
+        values = []
+
+        for value in self.enumerate_key(base_key, sub_key):
+            values.append(value)
+
+        return values
