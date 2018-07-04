@@ -241,7 +241,7 @@ class RemotePlugin(plugin.Plugin):
 
         # Try connecting to the pyro server over any IP address that that the machine has.
         for address in self.vm.ip_addresses:
-            server_uri = URI_FORMAT.format(address)
+            server_uri = URI_FORMAT.format(address=address)
             try:
                 self.vm._pyro_daemon = Pyro4.Proxy(server_uri)
                 return
