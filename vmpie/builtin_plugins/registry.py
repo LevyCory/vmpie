@@ -171,7 +171,6 @@ class WindowsRegistryPlugin(plugin.Plugin):
             if handle is not None:
                 self._win32api.RegCloseKey(handle)
 
-
     def delete_key(self, base_key, sub_key):
         """
         Delete a registry key along with all of it's values
@@ -182,7 +181,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         """
         self._win32api.RegDeleteKey(self._get_base_key(base_key), sub_key)
 
-    def enumerate_key(self, base_key, sub_key):
+    def enumerate_key_values(self, base_key, sub_key):
         """
         Enumerate a registry key. This is a generator for easy iteration over registry keys.
         @param base_key: The key's base key.
@@ -190,7 +189,29 @@ class WindowsRegistryPlugin(plugin.Plugin):
         @param sub_key: The key's full path with the base key omitted.
         @type sub_key: I{str}
         @return: Values that are stored in the supplied key.
-        @rtype: Tuple
+        @rtype: I{tuple}
+        """
+        index = -1
+        with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
+            # Iterate over the registry key
+            while True:
+                try:
+                    index += 1
+                    # Yield each registry value
+                    yield self._win32api.RegEnumValue(reg_key, index)
+                except Exception:
+                    # Either an exception occurred or the we've reached the end of the registry key.
+                    break
+
+    def enumerate_key_subkeys(self, base_key, sub_key):
+        """
+        Enumerate a registry key. This is a generator for easy iteration over registry keys.
+        @param base_key: The key's base key.
+        @type base_key: I{str}
+        @param sub_key: The key's full path with the base key omitted.
+        @type sub_key: I{str}
+        @return: Subordinate keys that are under the supplied key.
+        @rtype: I{str}
         """
         index = -1
         with self._open_registry_key(base_key, sub_key, self._win32con.KEY_ALL_ACCESS) as reg_key:
@@ -203,20 +224,3 @@ class WindowsRegistryPlugin(plugin.Plugin):
                 except Exception:
                     # Either an exception occurred or the we've reached the end of the registry key.
                     break
-
-    def read_key(self, base_key, sub_key):
-        """
-        Read a registry key. Get all values of a registry key at once.
-        @param base_key: The key's base key.
-        @type base_key: I{str}
-        @param sub_key: The key's full path with the base key omitted.
-        @type sub_key: I{str}
-        @return: The key's values.
-        @rtype: I{list}
-        """
-        values = []
-
-        for value in self.enumerate_key(base_key, sub_key):
-            values.append(value)
-
-        return values
