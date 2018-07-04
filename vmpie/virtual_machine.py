@@ -179,6 +179,17 @@ class VirtualMachine(object):
         self._path = ""
         self._datastores = []
 
+    @property
+    def ip_addresses(self):
+        """
+        A list of machine ip addresses
+        """
+        addresses = []
+        for nic in self._pyVmomiVM.guest.net:
+            addresses.append(nic.ipAddress[1])
+
+        return addresses
+
     def _is_plugin_compatible(self, plugin):
         """
         Check if a plugin is compatible with the guest OS.

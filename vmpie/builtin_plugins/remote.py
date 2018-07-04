@@ -231,17 +231,6 @@ class RemotePlugin(plugin.Plugin):
         self.connect()
         self.load_modules()
 
-    @property
-    def _machine_ip_address(self):
-        """
-        A list of machine ip addresses
-        """
-        addresses = []
-        for nic in self.vm._pyVmomiVm.guest.net:
-            addresses.append(nic.ipAddress[1])
-
-        return addresses
-
     def connect(self):
         """
         Connects to the Pyro server on the target machine.
@@ -251,7 +240,7 @@ class RemotePlugin(plugin.Plugin):
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
 
         # Try connecting to the pyro server over any IP address that that the machine has.
-        for address in self._machine_ip_address:
+        for address in self.vm.ip_addresses:
             server_uri = URI_FORMAT.format(address)
             try:
                 self.vm._pyro_daemon = Pyro4.Proxy(server_uri)
