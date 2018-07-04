@@ -29,6 +29,8 @@ REF_LABEL = 3
 FILE_LABEL = 4
 MAPPING_LABEL = 5
 PICKLED_LABEL = 6
+DEFAULT_VMPIE_PORT = 13337
+URI_FORMAT =  "PYRO:Vmpie.Server@{{address}}:{port}".format(port=DEFAULT_VMPIE_PORT)
 
 _BUILTIN_TYPES = [
     type, object, bool, complex, dict, float, int, list, slice, str, tuple, set,
@@ -229,16 +231,34 @@ class RemotePlugin(plugin.Plugin):
         self.connect()
         self.load_modules()
 
+    @property
+    def _machine_ip_address(self):
+        """
+        A list of machine ip addresses
+        """
+        addresses = []
+        for nic in self.vm._pyVmomiVm.guest.net:
+            addresses.append(nic.ipAddress[1])
+
+        return addresses
+
     def connect(self):
         """
-        Connects to the Pyro server on the target   machine.
+        Connects to the Pyro server on the target machine.
         @return: Pyro4 proxy to the Pyro server on the target machine.
         @rtype: Pyro4.Proxy
         """
         Pyro4.config.SERIALIZER = consts.DEFAULT_SERIALIZER
-        # TODO: Don't hardcode the URI
-        self.vm._pyro_daemon = Pyro4.Proxy("PYRO:Vmpie.Server@10.0.0.135:2808")
 
+        # Try connecting to the pyro server over any IP address that that the machine has.
+        for address in self._machine_ip_address:
+            server_uri = URI_FORMAT.format(address)
+            try:
+                self.vm._pyro_daemon = Pyro4.Proxy(server_uri)
+                return
+            except Exception:
+                # If the connection failed just try the next ip address
+                continue
 
     def load_modules(self):
         self.vm._pyro_daemon.execute("import inspect")
