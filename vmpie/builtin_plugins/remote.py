@@ -333,6 +333,9 @@ class _RemoteModule(object):
         # Item is a regular attribute - return its value
         return unpack(self.vm, self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item)))
 
+    def __str__(self):
+        return "Module '{name}' on VM '{vm}'".format(name=self._name, vm=self.vm.name)
+
 
 class _RemoteSubModule(object):
     """
@@ -369,6 +372,9 @@ class _RemoteSubModule(object):
         # Item is a regular attribute - return its value
         return unpack(self.vm, self.vm._pyro_daemon.evaluate("%s.%s" % (self._name, item)))
 
+    def __str__(self):
+        return "Module '{name}' on VM '{vm}'".format(name=self._name, vm=self.vm.name)
+
 
 class _RemoteMethod(object):
     """
@@ -389,6 +395,9 @@ class _RemoteMethod(object):
         args = [pack(arg) for arg in args]
         kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
         return unpack(self.vm, self.vm._pyro_daemon.invokeModule(self._name, args, kwargs))
+
+    def __str__(self):
+        return "Method '{name}' on VM '{vm}'".format(name=self._name, vm=self.vm.name)
 
 
 class _RemoteFunction(object):
@@ -415,6 +424,9 @@ class _RemoteFunction(object):
         args = [pack(arg) for arg in args]
         kwargs = {key: pack(value) for key, value in kwargs.iteritems()}
         return unpack(self.vm, self.vm._pyro_daemon.call(pack(self._function_name), args, kwargs))
+
+    def __str__(self):
+        return "Function '{name}' on VM '{vm}'".format(name=self._function_name, vm=self.vm.name)
 
 
 class _RemoteObject(object):
