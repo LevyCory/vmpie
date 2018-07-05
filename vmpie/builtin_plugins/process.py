@@ -19,6 +19,7 @@ import vmpie.plugin as plugin
 # ==================================================== CONSTANTS ===================================================== #
 
 PARAM_INCORRECT_ERRNO = 87
+WAIT_TIMEOUT = 258
 BUFFER_SIZE = 4096
 PIPE_NAME = r'\\.\pipe\vmpie-{}'
 PS_COMMAND = '$objUser = New-Object System.Security.Principal.NTAccount("{}", "{}"); $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier]); return $strSID.Value'
@@ -520,10 +521,12 @@ class WinProcess(object):
     def __init__(self, vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe):
         self.vm = vm
         self.pid = pid
-        self.process_handle = process_handle
-        self.stdin_pipe = stdin_pipe
-        self.stdout_pipe = stdout_pipe
-        self.stderr_pipe = stderr_pipe
+        self._process_handle = process_handle
+        self._stdin_pipe = stdin_pipe
+        self._stdout_pipe = stdout_pipe
+        self._stderr_pipe = stderr_pipe
+        self._stdout_closed = False
+        self._stderr_closed = False
 
     @property
     def returncode(self):
@@ -532,11 +535,21 @@ class WinProcess(object):
         :return: {int} The return code
         """
         returncode = self.vm.remote.win32process.GetExitCodeProcess(
-            self.process_handle)
+            self._process_handle)
 
         if returncode != 259:
             # 259 returncode is STILL_ACTIVE
             return returncode
+
+    @property
+    def running(self):
+        """
+        Check if a process is still running
+        :return: {bool} True if process is still running, False otherwise.
+        """
+        # Wait for the process to complete
+        return self.vm.remote.win32event.WaitForSingleObject(
+            self._process_handle, 0) == WAIT_TIMEOUT
 
     def wait(self, timeout=None):
         """
@@ -548,10 +561,10 @@ class WinProcess(object):
             timeout = self.vm.remote.win32event.INFINITE
 
         # Wait for the process to complete
-        self.vm.remote.win32event.WaitForSingleObject(self.process_handle, timeout)
+        self.vm.remote.win32event.WaitForSingleObject(self._process_handle, timeout)
 
         # Get return code
-        return self.vm.remote.win32process.GetExitCodeProcess(self.process_handle)
+        return self.vm.remote.win32process.GetExitCodeProcess(self._process_handle)
 
     def kill(self):
         """
@@ -564,10 +577,10 @@ class WinProcess(object):
         # Kill process
         self.vm.remote.win32process.TerminateProcess(proc, 0)
 
-        self.process_handle.close()
-        self.stdin_pipe.close()
-        self.stdout_pipe.close()
-        self.stderr_pipe.close()
+        self._process_handle.close()
+        self._stdin_pipe.close()
+        self._stdout_pipe.close()
+        self._stderr_pipe.close()
 
     def write(self, data, newline=True):
         """
@@ -575,9 +588,9 @@ class WinProcess(object):
         :param data: {str} The data to write to the stdin
         :param newline: {bool} Whether to add newline (\n) after the data
         """
-        self.vm.remote.win32file.WriteFile(self.stdin_pipe, data)
+        self.vm.remote.win32file.WriteFile(self._stdin_pipe, data)
         if newline:
-            self.vm.remote.win32file.WriteFile(self.stdin_pipe, "\n")
+            self.vm.remote.win32file.WriteFile(self._stdin_pipe, "\n")
 
     def read_stdout(self, chunk=BUFFER_SIZE):
         """
@@ -587,11 +600,31 @@ class WinProcess(object):
         """
         output = ""
 
+        if self._stdout_closed:
+            return output
+
         try:
             while True:
-                # Read from stdout
-                # TODO: Check why ERROR_BROKEN_PIPE is not being raised!
-                output += self.vm.remote.win32file.ReadFile(self.stdout_pipe, chunk)[1]
+                if not self.running and not \
+                        self.vm.remote.win32pipe.PeekNamedPipe(
+                            self._stdout_pipe, chunk)[1]:
+                    # Process is finished and no more data is available - break
+                    # the loop
+
+                    break
+
+                # Process is still running or there is more data to read -
+                # continue trying to read more data
+                _, bytes_to_read, _ = self.vm.remote.win32pipe.PeekNamedPipe(
+                    self._stdout_pipe, chunk)
+
+                # Check whether there is data to read from the pipe
+                if bytes_to_read:
+                    output += \
+                        self.vm.remote.win32file.ReadFile(self._stdout_pipe,
+                                                          min(bytes_to_read,
+                                                              chunk))[1]
+
         except self.vm.remote.pywintypes.error as e:
             if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
                 # Pipe is closed - no more data to read from the pipe
@@ -599,7 +632,8 @@ class WinProcess(object):
             else:
                 raise
 
-        self.stdout_pipe.close()
+        self._stdout_pipe.close()
+        self._stdout_closed = True
         return output
 
     def read_stderr(self, chunk=BUFFER_SIZE):
@@ -610,11 +644,31 @@ class WinProcess(object):
         """
         output = ""
 
+        if self._stderr_closed:
+            raise EOFError("Pipe is closed. No more data to read from pipe.")
+
         try:
             while True:
-                # Read from stdout
-                # TODO: Check why ERROR_BROKEN_PIPE is not being raised!
-                output += self.vm.remote.win32file.ReadFile(self.stderr_pipe, chunk)[1]
+                if not self.running and not \
+                        self.vm.remote.win32pipe.PeekNamedPipe(
+                            self._stderr_pipe, chunk)[1]:
+                    # Process is finished and no more data is available - break
+                    #  loop
+
+                    break
+
+                # Process is still running or there is more data to read -
+                # continue trying to read more data
+                _, bytes_to_read, _ = self.vm.remote.win32pipe.PeekNamedPipe(
+                    self._stderr_pipe, chunk)
+
+                # Check whether there is data to read from the pipe
+                if bytes_to_read:
+                    output += \
+                        self.vm.remote.win32file.ReadFile(self._stderr_pipe,
+                                                          min(bytes_to_read,
+                                                              chunk))[1]
+
         except self.vm.remote.pywintypes.error as e:
             if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
                 # Pipe is closed - no more data to read from the pipe
@@ -622,7 +676,8 @@ class WinProcess(object):
             else:
                 raise
 
-        self.stderr_pipe.close()
+        self._stderr_pipe.close()
+        self._stderr_closed = True
         return output
 
     def read_stdout_nonblocking(self, chunk=BUFFER_SIZE):
@@ -632,15 +687,26 @@ class WinProcess(object):
         :param chunk: {int} The size of the chunk to read
         :return: {str} The output
         """
+        if self._stdout_closed:
+            return ""
+
         try:
             # Read from stdout
-            buffer, bytes_to_read, result = self.vm.remote.win32pipe.PeekNamedPipe(self.stderr_pipe, 0)
+            _, bytes_to_read, _ = self.vm.remote.win32pipe.PeekNamedPipe(
+                self._stdout_pipe, 0)
+
             if bytes_to_read:
-                return self.vm.remote.win32file.ReadFile(self.stdout_pipe, min(bytes_to_read, chunk))[1]
+                return self.vm.remote.win32file.ReadFile(self._stdout_pipe,
+                                                         min(bytes_to_read,
+                                                             chunk))[1]
+            elif not self.running:
+                self._stdout_closed = True
+
         except self.vm.remote.pywintypes.error as e:
             if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
                 # Pipe is closed - no more data to read from the pipe
-                pass
+                self._stdout_closed = True
+                self._stdout_pipe.close()
             else:
                 raise
 
@@ -653,24 +719,33 @@ class WinProcess(object):
         :param chunk: {int} The size of the chunk to read
         :return: {str} The output
         """
+        if self._stderr_closed:
+            return ""
+
         try:
-            # Read from stderr
-            buffer, bytes_to_read, result = self.vm.remote.win32pipe.PeekNamedPipe(
-                self.stderr_pipe, 0)
+            # Read from stdout
+            _, bytes_to_read, _ = self.vm.remote.win32pipe.PeekNamedPipe(
+                self._stderr_pipe, 0)
+
             if bytes_to_read:
-                return self.vm.remote.win32file.ReadFile(self.stderr_pipe,
+                return self.vm.remote.win32file.ReadFile(self._stderr_pipe,
                                                          min(bytes_to_read,
                                                              chunk))[1]
+            elif not self.running:
+                self._stdout_closed = True
+
         except self.vm.remote.pywintypes.error as e:
             if e.winerror == self.vm.remote.winerror.ERROR_BROKEN_PIPE:
                 # Pipe is closed - no more data to read from the pipe
-                pass
+                self._stderr_closed = True
+                self._stderr_pipe.close()
             else:
                 raise
 
         return ""
+
     def __del__(self):
-        self.process_handle.close()
-        self.stdin_pipe.close()
-        self.stdout_pipe.close()
-        self.stderr_pipe.close()
+        self._process_handle.close()
+        self._stdin_pipe.close()
+        self._stdout_pipe.close()
+        self._stderr_pipe.close()
