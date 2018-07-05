@@ -15,6 +15,7 @@
 #                 sub key:  The subordinate key is the rest of the registry key's path after the base (hive) key.
 #                           If we are reading the key HKCU\Software\Google\Chrome then HKCU is the base key and
 #                           "Software\Google\Chrome" is the sub key.
+#
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
@@ -51,7 +52,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
 
     def _setup_(self):
         """
-        Load remote VM's constants of base registry keys and permission related constants
+        Load remote VM's constants of base registry keys and data type constants
         """
         self._win32con = self.vm.remote.win32con
         self._win32api = self.vm.remote.win32api
@@ -181,7 +182,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
         """
         self._win32api.RegDeleteKey(self._get_base_key(base_key), sub_key)
 
-    def enumerate_key_values(self, base_key, sub_key):
+    def enumerate_values(self, base_key, sub_key):
         """
         Enumerate a registry key. This is a generator for easy iteration over registry keys.
         @param base_key: The key's base key.
@@ -203,7 +204,7 @@ class WindowsRegistryPlugin(plugin.Plugin):
                     # Either an exception occurred or the we've reached the end of the registry key.
                     break
 
-    def enumerate_key_subkeys(self, base_key, sub_key):
+    def enumerate_keys(self, base_key, sub_key):
         """
         Enumerate a registry key. This is a generator for easy iteration over registry keys.
         @param base_key: The key's base key.
