@@ -6,14 +6,7 @@
 # ==================================================================================================================== #
 # ===================================================== IMPORTS ====================================================== #
 
-import os
 import random
-
-from pyVmomi import vim
-
-from vmpie import consts
-from vmpie import utils
-from vmpie import vmpie_exceptions
 import vmpie.plugin as plugin
 
 # ==================================================== CONSTANTS ===================================================== #
@@ -98,7 +91,7 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         return self.vm.remote.teleport(_get_process_by_name)(ps_name)
 
-    def get_process_by_pid(self, pid):
+    def get_process_by_id(self, pid):
         """
         Retrieves a remote process handle from a virtual machine by name.
         @param ps: The process name
@@ -140,108 +133,6 @@ class WindowsProcessPlugin(plugin.Plugin):
             return self.vm.remote.ctypes.windll.shell32.IsUserAnAdmin()
         except:
             return False
-
-    def run(self, command, username=None, password=None,
-                    domain=None, daemon=False, as_admin=False):
-        """
-        Run a command as another user
-        :param command: {str} The command to run
-        :param username: {str} The username to run as (optional)
-        :param domain: {str} The domain of the user
-        :param password: {str} The password of the user
-        :param daemon: {bool} Whether to run in the background or not
-        :param as_admin: {bool} Whether to run as admin.
-            If this is set to True, then the username, domain & password
-            are ignored and the process will be ran as the owner of
-             winlogon.exe process.
-        :return:  {int, PyHANDLE, PyHANDLE, PyHANDLE, PyHANDLE} pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe
-        """
-        if as_admin and not self._is_admin():
-            # Get the user token from the winlogon.exe process
-            usertoken = self.__get_user_token(ps='winlogon.exe')
-
-        elif not (username or password or domain):
-            # Run as currently logged on user
-            usertoken = self.__get_user_token(ps='explorer.exe')
-
-        else:
-            # Get token of given user
-            usertoken = self.vm.remote.win32security.LogonUser(
-                username, domain, password,
-                self.vm.remote.win32con.LOGON32_LOGON_INTERACTIVE,
-                self.vm.remote.win32con.LOGON32_PROVIDER_DEFAULT,
-            )
-
-        sids = [self._get_current_sid()]
-
-        if username and password:
-            # Get the sid of the given user
-            sids.append(self._lookup_sid(domain, username))
-
-        if sids is None:
-            sattrs = None
-        else:
-            # Create the security attributes
-            sattrs = self._create_security_attributes(
-                sids,
-                inherit=True,
-                access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
-            )
-
-        # Create the named pipes
-        stdin_pipe, stdin_name = self._create_named_pipe(sids)
-        stdout_pipe, stdout_name = self._create_named_pipe(sids)
-        stderr_pipe, stderr_name = self._create_named_pipe(sids)
-
-        # Make sure that the parent process's pipe ends are not inherited
-        self.vm.remote.win32api.SetHandleInformation(stdin_pipe,
-                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-                                                     0)
-        self.vm.remote.win32api.SetHandleInformation(stdout_pipe,
-                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-                                                     0)
-        self.vm.remote.win32api.SetHandleInformation(stderr_pipe,
-                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
-                                                     0)
-
-        try:
-            # Create environment for the usertoken
-            environment = self.vm.remote.win32profile.CreateEnvironmentBlock(usertoken, False)
-        except:
-            environment = None
-
-        try:
-            # Get the user profile directory of the given user
-            profile_dir = self.vm.remote.win32profile.GetUserProfileDirectory(usertoken)
-        except:
-            profile_dir = None
-
-        # Create process's startup info
-        startup_info = self._create_startup_info(stdin_name,
-                                                 stdout_name,
-                                                 stderr_name,
-                                                 daemon
-        )
-
-        # Create the process
-        res = self.vm.remote.win32process.CreateProcessAsUser(
-            usertoken, None, command, sattrs, None, True,
-            self.vm.remote.win32con.CREATE_NEW_CONSOLE,
-            # self.vm.remote.os.environ, self.vm.remote.os.getcwd(),
-            environment, profile_dir,
-            startup_info)
-
-        process_handle = res[0]  # The process handle
-        res[1].Close()  # Close the thread handle - not relevant
-        pid = res[2]  # The pid
-
-        # Connect to the pipes
-        self.vm.remote.win32pipe.ConnectNamedPipe(stdin_pipe)
-        self.vm.remote.win32pipe.ConnectNamedPipe(stdout_pipe)
-        self.vm.remote.win32pipe.ConnectNamedPipe(stderr_pipe)
-
-        # Remember to close the process!
-        return WinProcess(self.vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe)
 
     def _get_current_sid(self):
         """
@@ -346,19 +237,6 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         raise Exception("Could not create pipe after 100 attempts.")
 
-    def kill_process(self, pid):
-        """
-        Kill a process by PID.
-        @param pid: The process PID
-        @type pid: I{int}
-        """
-        # Get process by pid
-        proc = self.vm.remote.win32api.OpenProcess(self.vm.remote.win32com.PROCESS_ALL_ACCESS,
-                                                   False,
-                                                   pid)
-        # Kill process
-        self.vm.remote.win32process.TerminateProcess(proc, 0)
-
     def _create_startup_info(self, stdin_name,
                              stdout_name,
                              stderr_name,
@@ -416,6 +294,119 @@ class WindowsProcessPlugin(plugin.Plugin):
 
         return startupinfo
 
+    def run(self, command, username=None, password=None,
+                    domain=None, daemon=False, as_admin=False):
+        """
+        Run a command as another user
+        :param command: {str} The command to run
+        :param username: {str} The username to run as (optional)
+        :param domain: {str} The domain of the user
+        :param password: {str} The password of the user
+        :param daemon: {bool} Whether to run in the background or not
+        :param as_admin: {bool} Whether to run as admin.
+            If this is set to True, then the username, domain & password
+            are ignored and the process will be ran as the owner of
+             winlogon.exe process.
+        :return:  {int, PyHANDLE, PyHANDLE, PyHANDLE, PyHANDLE} pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe
+        """
+        if as_admin and not self._is_admin():
+            # Get the user token from the winlogon.exe process
+            usertoken = self.__get_user_token(ps='winlogon.exe')
+
+        elif not (username or password or domain):
+            # Run as currently logged on user
+            usertoken = self.__get_user_token(ps='explorer.exe')
+
+        else:
+            # Get token of given user
+            usertoken = self.vm.remote.win32security.LogonUser(
+                username, domain, password,
+                self.vm.remote.win32con.LOGON32_LOGON_INTERACTIVE,
+                self.vm.remote.win32con.LOGON32_PROVIDER_DEFAULT,
+            )
+
+        sids = [self._get_current_sid()]
+
+        if username and password:
+            # Get the sid of the given user
+            sids.append(self._lookup_sid(domain, username))
+
+        if sids is None:
+            sattrs = None
+        else:
+            # Create the security attributes
+            sattrs = self._create_security_attributes(
+                sids,
+                inherit=True,
+                access=self.vm.remote.win32con.PROCESS_ALL_ACCESS
+            )
+
+        # Create the named pipes
+        stdin_pipe, stdin_name = self._create_named_pipe(sids)
+        stdout_pipe, stdout_name = self._create_named_pipe(sids)
+        stderr_pipe, stderr_name = self._create_named_pipe(sids)
+
+        # Make sure that the parent process's pipe ends are not inherited
+        self.vm.remote.win32api.SetHandleInformation(stdin_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
+        self.vm.remote.win32api.SetHandleInformation(stdout_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
+        self.vm.remote.win32api.SetHandleInformation(stderr_pipe,
+                                                     self.vm.remote.win32con.HANDLE_FLAG_INHERIT,
+                                                     0)
+
+        try:
+            # Create environment for the usertoken
+            environment = self.vm.remote.win32profile.CreateEnvironmentBlock(usertoken, False)
+        except:
+            environment = None
+
+        try:
+            # Get the user profile directory of the given user
+            profile_dir = self.vm.remote.win32profile.GetUserProfileDirectory(usertoken)
+        except:
+            profile_dir = None
+
+        # Create process's startup info
+        startup_info = self._create_startup_info(stdin_name,
+                                                 stdout_name,
+                                                 stderr_name,
+                                                 daemon
+        )
+
+        # Create the process
+        res = self.vm.remote.win32process.CreateProcessAsUser(
+            usertoken, None, command, sattrs, None, True,
+            self.vm.remote.win32con.CREATE_NEW_CONSOLE,
+            environment, profile_dir,
+            startup_info)
+
+        process_handle = res[0]  # The process handle
+        res[1].Close()  # Close the thread handle - not relevant
+        pid = res[2]  # The pid
+
+        # Connect to the pipes
+        self.vm.remote.win32pipe.ConnectNamedPipe(stdin_pipe)
+        self.vm.remote.win32pipe.ConnectNamedPipe(stdout_pipe)
+        self.vm.remote.win32pipe.ConnectNamedPipe(stderr_pipe)
+
+        return WinProcess(self.vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe)
+
+    def kill_process(self, pid):
+        """
+        Kill a process by PID.
+        @param pid: The process PID
+        @type pid: I{int}
+        """
+        # Get process by pid
+        proc = self.vm.remote.win32api.OpenProcess(self.vm.remote.win32con.PROCESS_ALL_ACCESS,
+                                                   False,
+                                                   pid)
+        # Kill process
+        self.vm.remote.win32process.TerminateProcess(proc, 0)
+
 
 class UnixProcessPlugin(plugin.Plugin):
     """
@@ -429,7 +420,7 @@ class UnixProcessPlugin(plugin.Plugin):
     _RUN_COMMAND_AS_ADMIN_FORMAT = "echo {password} | sudo -S {command}"
     SIGKILL = 9
 
-    def run(self, command, async=False, as_admin=False, daemon=True, shell=False):
+    def run(self, command, as_admin=False, daemon=True, shell=False):
         """
         Run a command in the virtual machine.
         @param command: The command to run
@@ -451,13 +442,14 @@ class UnixProcessPlugin(plugin.Plugin):
 
         # Run the process on the vm
         # TODO: close_fds might cause problems
-        new_process = self.vm.remote.subprocess.Popen(command, shell=shell, close_fds=daemon)
+        new_process = self.vm.remote.subprocess.Popen(command,
+                                                      stdout=self.vm.remote.subprocess.PIPE,
+                                                      stderr=self.vm.remote.subprocess.PIPE,
+                                                      stdin=self.vm.remote.subprocess.PIPE,
+                                                      shell=shell,
+                                                      close_fds=daemon)
 
-        # Wait for the process to terminate.
-        if not async:
-            new_process.wait()
-
-        return new_process
+        return UnixProcess(self.vm, new_process)
 
     def kill_process(self, process):
         """
@@ -517,6 +509,76 @@ class UnixProcessPlugin(plugin.Plugin):
         self.vm.remote.os.kill(pid, signal)
 
 
+class UnixProcess(object):
+    def __init__(self, vm, popen):
+        self.vm = vm
+        self.popen = popen
+        self._stdout = ""
+        self._stderr = ""
+
+    @property
+    def returncode(self):
+        """
+        The return code of the process (None if process is still running)
+        :return: {int} The return code
+        """
+        return self.popen.returncode
+
+    @property
+    def running(self):
+        """
+        Check if a process is still running
+        :return: {bool} True if process is still running, False otherwise.
+        """
+        # Wait for the process to complete
+        return self.popen.poll()
+
+    def wait(self):
+        self.popen.wait()
+        return self.returncode
+
+    def kill(self):
+        self.vm.remote.os.kill(self.popen.pid, 9)
+
+    def write(self, data, newline=True):
+        self.popen.stdin.write(data)
+
+        if newline:
+            self.popen.stdin.write("\n")
+
+    def read_stdout(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stdout pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        return self.popen.stdout.read()
+
+    def read_stderr(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stderr pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        return self.popen.stderr.read()
+
+    def read_stdout_nonblocking(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stdout pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        return self.popen.stdout.read(chunk)
+
+    def read_stderr_nonblocking(self, chunk=BUFFER_SIZE):
+        """
+        Read output from stdout pipe (wait until EOF)
+        :param chunk: {int} The size of the chunk to read each time
+        :return: {str} The output
+        """
+        return self.popen.stderr.read(chunk)
+
+
 class WinProcess(object):
     def __init__(self, vm, pid, process_handle, stdin_pipe, stdout_pipe, stderr_pipe):
         self.vm = vm
@@ -527,6 +589,7 @@ class WinProcess(object):
         self._stderr_pipe = stderr_pipe
         self._stdout_closed = False
         self._stderr_closed = False
+        self._closed = False
 
     @property
     def returncode(self):
@@ -547,21 +610,21 @@ class WinProcess(object):
         Check if a process is still running
         :return: {bool} True if process is still running, False otherwise.
         """
-        # Wait for the process to complete
-        return self.vm.remote.win32event.WaitForSingleObject(
-            self._process_handle, 0) == WAIT_TIMEOUT
+        if not self._closed:
+            # Wait for the process to complete
+            return self.vm.remote.win32event.WaitForSingleObject(
+                self._process_handle, 0) == WAIT_TIMEOUT
 
-    def wait(self, timeout=None):
+        return True
+
+    def wait(self):
         """
         Wait for process and return its return code
         :param process_handle: {PyHANDLE} The process handle
         :return: {int} The return code of the process
         """
-        if not timeout:
-            timeout = self.vm.remote.win32event.INFINITE
-
         # Wait for the process to complete
-        self.vm.remote.win32event.WaitForSingleObject(self._process_handle, timeout)
+        self.vm.remote.win32event.WaitForSingleObject(self._process_handle, self.vm.remote.win32event.INFINITE)
 
         # Get return code
         return self.vm.remote.win32process.GetExitCodeProcess(self._process_handle)
@@ -570,17 +633,19 @@ class WinProcess(object):
         """
         Kill the process
         """
-        proc = self.vm.remote.win32api.OpenProcess(
-            self.vm.remote.win32com.PROCESS_ALL_ACCESS,
-            False,
-            self.pid)
-        # Kill process
-        self.vm.remote.win32process.TerminateProcess(proc, 0)
+        if self.running:
+            proc = self.vm.remote.win32api.OpenProcess(
+                self.vm.remote.win32con.PROCESS_ALL_ACCESS,
+                False,
+                self.pid)
+            # Kill process
+            self.vm.remote.win32process.TerminateProcess(proc, 0)
 
         self._process_handle.close()
         self._stdin_pipe.close()
         self._stdout_pipe.close()
         self._stderr_pipe.close()
+        self._closed = True
 
     def write(self, data, newline=True):
         """
