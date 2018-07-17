@@ -9,10 +9,9 @@
 import hashlib
 import logging
 import requests
-
+import os
 from pyVmomi import vim
 
-from vmpie import consts
 from vmpie import utils
 from vmpie import vmpie_exceptions
 import vmpie.plugin as plugin
@@ -131,6 +130,7 @@ class FilesystemPlugin(plugin.Plugin):
         creds = vim.vm.guest.NamePasswordAuthentication(
             username=self.vm.username,
             password=self.vm.password)
+
         if not file_content:
             file_content = ""
 
@@ -141,7 +141,7 @@ class FilesystemPlugin(plugin.Plugin):
                    file_location=file_location)
 
         try:
-            utils.run_command_in_vm(self.vm.pyVmomiVM,
+            utils.run_command_in_vm(self.vm._pyVmomiVM,
                                     command,
                                     arguments,
                                     creds)
@@ -170,15 +170,11 @@ class FilesystemPlugin(plugin.Plugin):
                 file_content = myfile.read()
 
             try:
-
-                logging.debug('Uploading file to vm {vm}'.format(vm=self.vm.name))
-
                 file_attribute = vim.vm.guest.FileManager.FileAttributes()
-
                 vcenter = utils.get_vcenter()
 
                 url = vcenter._connection.content.guestOperationsManager.fileManager. \
-                    InitiateFileTransportToGuest(self.vm,
+                    InitiateFileTransportToGuest(self.vm._pyVmomiVM,
                                                  creds,
                                                  path_in_vm,
                                                  file_attribute,
@@ -187,23 +183,62 @@ class FilesystemPlugin(plugin.Plugin):
 
                 resp = requests.put(url, data=file_content, verify=False)
 
-                if not resp.status_code == consts.SUCCESS_RESPONSE_CODE:
+                if resp.ok:
                     logging.info('Successfully uploaded file.')
 
                 else:
-                    logging.error('Error while uploading file. Response status code: {code}'.format(
+                    logging.error('Error while uploading file. Response status code: {code}.'.format(
                         code=resp.status_code))
 
             except IOError:
-                logging.error('Unable to read file {file_path}. Check you path'.format(
-                    file_path=local_file_path), exc_info=True)
+                logging.exception('Unable to read file {file_path}. Check you path.'.format(
+                    file_path=local_file_path))
 
             except Exception:
-                logging.error('An error occurred while uploading file', exc_info=True)
+                logging.exception('An error occurred while uploading file.')
 
         else:
             logging.error('File will not be uploaded.')
             raise vmpie_exceptions.VMWareToolsException
 
-    def download_file(self):
-        pass
+    def offline_download_file(self, path_in_vm, local_file_path):
+        if utils.is_vmware_tools_running:
+            logging.info('Downloading file from vm {vm}'.format(vm=self.vm.name))
+
+            creds = vim.vm.guest.NamePasswordAuthentication(
+                username=self.vm.username,
+                password=self.vm.password)
+
+            try:
+                vcenter = utils.get_vcenter()
+
+                file_info = vcenter._connection.content.guestOperationsManager.fileManager. \
+                    InitiateFileTransferFromGuest(self.vm._pyVmomiVM,
+                                                  creds,
+                                                  path_in_vm
+                                                  )
+
+                resp = requests.get(file_info.url, verify=False)
+
+                if not resp.ok:
+                    logging.error('Error while downloading file. Response status code: {code}.'.format(
+                        code=resp.status_code))
+
+                if not os.path.exists(os.path.dirname(local_file_path)):
+                    os.makedirs(os.path.dirname(local_file_path))
+
+                with open(local_file_path, 'wb') as myfile:
+                    myfile.write(resp.content)
+
+                logging.info('Successfully downloaded file.')
+
+            except IOError:
+                logging.exception('Unable to write to file {file_path}. Check you path.'.format(
+                    file_path=local_file_path))
+
+            except Exception:
+                logging.exception('An error occurred while downloading file.')
+
+        else:
+            logging.error('File will not be downloaded.')
+            raise vmpie_exceptions.VMWareToolsException
