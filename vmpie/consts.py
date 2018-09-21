@@ -1,4 +1,3 @@
-__author__ = 'CSI-USER'
 from os import path
 
 SPINNER_SLEEP = 0.1

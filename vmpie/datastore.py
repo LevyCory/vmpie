@@ -1,4 +1,3 @@
-__author__ = 'CSI-USER'
 from pyVmomi import vim
 from pyVmomi import vmodl
 
